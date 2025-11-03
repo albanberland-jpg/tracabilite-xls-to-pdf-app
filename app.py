@@ -17,7 +17,7 @@ if uploaded_file:
     colonne_tri = st.selectbox("Trier par :", df.columns)
     df_sorted = df.sort_values(by=colonne_tri)
 
-   if st.button("Générer le PDF"):
+if st.button("Générer le PDF"):
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
@@ -47,6 +47,11 @@ if uploaded_file:
     # Construction du PDF
     elements = [titre, Spacer(1, 12), table]
     doc.build(elements)
+
+    # Téléchargement
+    with open(pdf_path, "rb") as f:
+        st.download_button("⬇️ Télécharger le PDF", f, file_name="rapport.pdf")
+
 
     # Téléchargement
     with open(pdf_path, "rb") as f:
