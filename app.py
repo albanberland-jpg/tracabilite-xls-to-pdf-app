@@ -3,167 +3,166 @@ import pandas as pd
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import unicodedata, re
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.units import cm
+from xml.sax.saxutils import escape
+from datetime import datetime
 
+# --- Configuration de la page Streamlit ---
 st.set_page_config(page_title="Tracabilité XLS → PDF", layout="centered")
 st.title("📘 Générateur de fiches d’évaluation")
 
-uploaded_file = st.file_uploader("Choisir le fichier Excel (.xlsx)", type=["xlsx"])
+st.write("Chargez un fichier Excel pour générer un **PDF unique** contenant une fiche par stagiaire.")
 
-# --- Nettoyage des noms de colonnes ---
-def normaliser_colname(name):
-    s = str(name)
-    s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
-    s = s.lower().strip()
-    s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"[^a-z0-9_/()'’.-]", "", s)
-    return s
+uploaded_file = st.file_uploader("Importer un fichier Excel (.xlsx)", type=["xlsx"])
 
-# --- Nettoyage du texte pour affichage (version robuste) ---
-def nettoyer_texte_visible(txt):
-    if pd.isna(txt):
+# --- Fonction de nettoyage texte ---
+def nettoyer_texte_visible(texte):
+    if pd.isna(texte):
         return ""
-    s = str(txt)
-    # Remplacer les symboles par des espaces
-    s = re.sub(r"[_•■]", " ", s)
-    # Normalisation Unicode pour un nettoyage plus large des caractères non standards
-    s = ''.join(ch for ch in unicodedata.normalize("NFKC", s) if unicodedata.category(ch) not in ('Cc', 'Cf', 'Cs', 'Co', 'Cn'))
-    # Remplace les blocs d'espaces par un seul espace
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    return str(texte).replace("\xa0", " ").replace("\n", " ").strip()
 
-# --- Conversion d'une valeur en clé standardisée ---
-def valeur_cle(val):
-    if pd.isna(val):
-        return ""
-    s = str(val).upper()
-    s = s.replace(".", "").replace(" ", "").strip()
-    s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
-    return s
+# --- Fonction pour ajouter une section ---
+def add_section(elements, title, cols, ligne, item_style):
+    section_style = ParagraphStyle(
+        name="Section",
+        fontSize=11,
+        leading=14,
+        spaceBefore=10,
+        textColor=colors.HexColor("#1F4E79"),
+        parent=item_style
+    )
 
-# --- Application du code couleur HTML ---
-def coloriser_valeur_html(val):
-    key = valeur_cle(val)
-    # On utilise des objets colors.HexColor pour s'assurer que ReportLab les comprend
-    mapping = {
-        "FAIT": colors.HexColor("#00B050"),    # vert clair
-        "A": colors.HexColor("#007A33"),       # vert foncé
-        "ENCOURS": colors.HexColor("#FFD700"),  # jaune
-        "ECA": colors.HexColor("#ED7D31"),     # orange
-        "NE": colors.HexColor("#808080"),      # gris
-        "NA": colors.HexColor("#C00000")       # rouge
-    }
-    # Fallback noir si non trouvé
-    color = mapping.get(key, colors.HexColor("#000000")) 
-    txt = nettoyer_texte_visible(val)
-    # ReportLab supporte les codes Hex en minuscules dans le tag <font>
-    return f"<font color='{color.hexval()}'><b>{txt}</b></font>"
+    elements.append(Paragraph(f"<b>{escape(title)}</b>", section_style))
+    added = False
 
-# --- Application principale ---
-if uploaded_file:
+    for c in cols:
+        v = ligne.get(c, "")
+        if pd.notna(v) and str(v).strip():
+            nom_app = escape(c.replace("_", " ").title())
+            val_text = str(v).strip()
+
+            # --- Couleur selon la valeur ---
+            couleur = colors.black
+            val_lower = val_text.lower()
+            if val_lower == "fait":
+                couleur = colors.HexColor("#00B050")  # Vert clair
+            elif val_lower == "a":
+                couleur = colors.HexColor("#007A33")  # Vert foncé
+            elif val_lower in ["en cours", "encours"]:
+                couleur = colors.HexColor("#FFD700")  # Jaune
+            elif val_lower in ["eca", "e.c.a", "e.c.a."]:
+                couleur = colors.HexColor("#ED7D31")  # Orange
+            elif val_lower == "ne":
+                couleur = colors.HexColor("#808080")  # Gris
+            elif val_lower == "na":
+                couleur = colors.HexColor("#C00000")  # Rouge
+
+            # --- Style de la valeur ---
+            valeur_style = ParagraphStyle(
+                name="valeur_style",
+                parent=item_style,
+                textColor=couleur
+            )
+
+            # --- Ajout du libellé + valeur ---
+            elements.append(Paragraph(f"• {nom_app} :", item_style))
+            elements.append(Paragraph(val_text, valeur_style))
+            added = True
+
+    if not added:
+        elements.append(Paragraph("Aucun item", item_style))
+
+    elements.append(Spacer(1, 6))
+
+# --- Génération du PDF ---
+if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
-    df.columns = [normaliser_colname(c) for c in df.columns]
 
-    st.write("🔍 Colonnes détectées :", list(df.columns))
-
-    # Détection automatique
-    stagiaire_col = next((c for c in df.columns if "stagiaire" in c), None)
-    date_col = next((c for c in df.columns if "date" in c), None)
-    prenom_col = next((c for c in df.columns if "prenom" in c), None)
-    nom_col = next((c for c in df.columns if "nom" in c and "prenom" not in c), None)
+    # Recherche automatique des colonnes
+    stagiaire_col = next((c for c in df.columns if "stagiaire" in c.lower()), None)
+    prenom_col = next((c for c in df.columns if "prenom" in c.lower()), None)
+    nom_col = next((c for c in df.columns if "nom" in c.lower()), None)
+    date_col = next((c for c in df.columns if "date" in c.lower()), None)
 
     if not stagiaire_col:
-        st.error("⚠️ Colonne stagiaire introuvable dans le fichier.")
-        st.stop()
-
-    # Définition de la colonne formateur
-    formateur_col_auto = next((c for c in df.columns if "formateur" in c), None)
-    if formateur_col_auto is not None:
-         df["formateur_display"] = df[formateur_col_auto]
-    elif prenom_col and nom_col:
-         df["formateur_display"] = df[prenom_col].astype(str).str.strip() + " " + df[nom_col].astype(str).str.strip()
+        st.error("⚠️ Colonne 'stagiaire' introuvable dans le fichier.")
     else:
-        df["formateur_display"] = "N/A" # Valeur par défaut si non trouvé
-    
-    # Regroupement de colonnes par type
-    app_non_eval_cols = [c for c in df.columns if "app_non" in c or "non_soumis" in c]
-    app_eval_cols = [c for c in df.columns if "app_evalue" in c or "app_eval" in c]
-    axes_cols = [c for c in df.columns if "axe" in c or "progression" in c]
-    ancrage_cols = [c for c in df.columns if "ancrage" in c or "ancr" in c]
-    app_prop_cols = [c for c in df.columns if "app_qui" in c or "propose" in c]
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                                rightMargin=2*cm, leftMargin=2*cm,
+                                topMargin=2*cm, bottomMargin=2*cm)
 
-    # Styles PDF
-    styles = getSampleStyleSheet()
-    titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1, fontSize=18, textColor=colors.HexColor("#007A33"), spaceAfter=12)
-    section_style = ParagraphStyle("Section", parent=styles["Heading3"], fontSize=12, textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
-    
-    # CORRECTION : Ajout de allowHTML=True ici est essentiel
-    item_style = ParagraphStyle("Item", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=3, leftIndent=15, allowHTML=True)
+        styles = getSampleStyleSheet()
+        item_style = ParagraphStyle(
+            name="item",
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=14
+        )
 
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50)
-    elements = []
+        elements = []
 
-    # --- Boucle de génération du PDF ---
-    for stagiaire, group in df.groupby(stagiaire_col):
-        # Utiliser la première ligne pour les métadonnées (nom, date, formateur)
-        first_row = group.iloc[0]
+        # --- Boucle par stagiaire ---
+        groupes_stagiaires = df.groupby(stagiaire_col)
+        for stagiaire, groupe in groupes_stagiaires:
+            ligne = groupe.iloc[0]
 
-        # Saut de page pour les fiches suivantes
-        if elements:
-            elements.append(PageBreak())
+            # En-tête
+            titre_style = ParagraphStyle(
+                name="Titre",
+                parent=styles["Heading1"],
+                alignment=1,
+                textColor=colors.HexColor("#1F7A1F"),
+                fontSize=14
+            )
 
-        # En-tête de fiche
-        elements.append(Paragraph("Fiche d’évaluation", titre_style))
-        elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_style))
-        if date_col:
-            elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(first_row.get(date_col, ''))}", item_style))
-        elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(first_row.get('formateur_display', ''))}", item_style))
-        elements.append(Spacer(1, 8))
-
-        # Fonction d'ajout de section (améliorée pour gérer les longs commentaires vs notes)
-        def add_section(title, cols):
-            elements.append(Paragraph(f"<b>{title}</b>", section_style))
-            added = False
-            for c in cols:
-                v = first_row.get(c, "")
-                if pd.notna(v) and str(v).strip():
-                    nom_app = nettoyer_texte_visible(c.split("/")[-1].replace("_", " "))
-                    v_str = str(v).strip()
-                    
-                    # Si c'est une note courte (moins de 20 caractères), on la colorise
-                    if len(v_str) < 20 and valeur_cle(v) in ["FAIT", "A", "ENCOURS", "ECA", "NE", "NA"]:
-                        val_display = coloriser_valeur_html(v)
-                        elements.append(Paragraph(f"• {nom_app} : {val_display}", item_style))
-                    else:
-                        # Si c'est un long texte, on l'affiche simplement
-                        val_display = nettoyer_texte_visible(v)
-                        elements.append(Paragraph(f"• {nom_app} : {val_display}", item_style))
-                    added = True
-            
-            if not added:
-                elements.append(Paragraph("Aucun item", item_style))
+            elements.append(Paragraph("Fiche d’évaluation", titre_style))
             elements.append(Spacer(1, 6))
 
-        # Ajout des sections
-        add_section("APP non soumis à évaluation", app_non_eval_cols)
-        add_section("APP évalués", app_eval_cols)
-        add_section("Axes de progression", axes_cols)
-        add_section("Points d’ancrage", ancrage_cols)
-        add_section("APP qui pourraient être proposés", app_prop_cols)
+            date_eval = ligne.get(date_col, "")
+            if isinstance(date_eval, datetime):
+                date_eval = date_eval.strftime("%d/%m/%Y %H:%M")
 
-    # --- Finalisation ---
-    if elements:
-        try:
-            doc.build(elements)
-            buffer.seek(0)
+            prenom = ligne.get(prenom_col, "")
+            nom = ligne.get(nom_col, "")
 
-            st.success("✅ PDF généré avec succès.")
-            st.download_button("⬇️ Télécharger le PDF", data=buffer.getvalue(),
-                               file_name="fiches_stagiaires.pdf", mime="application/pdf")
-        except Exception as e:
-             st.error(f"Une erreur est survenue lors de la construction du PDF : {e}")
-    else:
-         st.warning("Aucune donnée n'a été trouvée pour générer les fiches.")
+            formateur = f"{prenom} {nom}".strip() or "—"
+
+            elements.append(Paragraph(f"<b>Stagiaire :</b> {escape(str(stagiaire))}", item_style))
+            elements.append(Paragraph(f"<b>Date :</b> {escape(str(date_eval))}", item_style))
+            elements.append(Paragraph(f"<b>Formateur :</b> {escape(formateur)}", item_style))
+            elements.append(Spacer(1, 12))
+
+            # Détection des groupes de colonnes
+            app_non_eval_cols = [c for c in df.columns if "non_evalue" in c.lower()]
+            app_eval_cols = [c for c in df.columns if "evalue" in c.lower()]
+            axes_cols = [c for c in df.columns if "axe" in c.lower()]
+            ancrage_cols = [c for c in df.columns if "ancrage" in c.lower()]
+            app_prop_cols = [c for c in df.columns if "propose" in c.lower()]
+
+            # Ajout des sections
+            if app_non_eval_cols:
+                add_section(elements, "APP non soumis à évaluation", app_non_eval_cols, ligne, item_style)
+            if app_eval_cols:
+                add_section(elements, "APP évalués", app_eval_cols, ligne, item_style)
+            if axes_cols:
+                add_section(elements, "Axes de progression", axes_cols, ligne, item_style)
+            if ancrage_cols:
+                add_section(elements, "Points d’ancrage", ancrage_cols, ligne, item_style)
+            if app_prop_cols:
+                add_section(elements, "APP qui pourraient être proposés", app_prop_cols, ligne, item_style)
+
+            elements.append(PageBreak())
+
+        # --- Création du PDF ---
+        doc.build(elements)
+
+        st.success("✅ Fichier PDF généré avec succès !")
+        st.download_button(
+            label="📄 Télécharger le PDF",
+            data=buffer.getvalue(),
+            file_name="fiches_stagiaires.pdf",
+            mime="application/pdf"
+        )
