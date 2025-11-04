@@ -208,7 +208,6 @@ if uploaded_file:
             mime="application/pdf",
         )
 
-Note d'Évaluation	Code Hexadécimal	Couleur
 FAIT	#00B050	Vert foncé
 A	#32CD32	Vert clair (Légèrement différent de FAIT)
 EN COURS	#FFD700	Jaune/Or
