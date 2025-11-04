@@ -4,7 +4,8 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.colors import HexColor
 
 st.set_page_config(page_title="Fiches d’évaluation", page_icon="📘")
 st.title("📘 Générateur de fiches d’évaluation")
@@ -33,7 +34,6 @@ if uploaded_file:
 
     # --- Recherche des colonnes principales ---
     prenom_col = next((c for c in df.columns if "prenom" in c), None)
-    # évite que "prenom" soit aussi détecté comme nom
     nom_col = next((c for c in df.columns if "nom" in c and "prenom" not in c and "stagiaire" not in c), None)
     stagiaire_col = next((c for c in df.columns if "stagiaire" in c or "participant" in c or "eleve" in c), None)
     date_col = next((c for c in df.columns if "date" in c), None)
@@ -42,22 +42,19 @@ if uploaded_file:
         st.error("❌ Impossible de trouver la colonne du stagiaire évalué.")
         st.stop()
 
-    # --- Création de la colonne 'formateur' avant filtrage ---
+    # --- Création de la colonne 'formateur' ---
     df["formateur"] = ""
     if prenom_col and nom_col:
         df["formateur"] = df[prenom_col].fillna("") + " " + df[nom_col].fillna("")
-    elif prenom_col:  # fallback si le nom n’est pas trouvé
+    elif prenom_col:
         df["formateur"] = df[prenom_col].fillna("")
     elif nom_col:
         df["formateur"] = df[nom_col].fillna("")
 
-    # --- Colonnes à masquer du PDF ---
+    # --- Colonnes à masquer ---
     mots_cles_a_masquer = [
-        "email", "e mail",  # gère les deux versions
-        "organisation", "departement", "jcmsplugin",
-        "temps", "taux", "score", "tentative",
-        "reussite", "question", "nombre de question",
-        "nom",  # déjà inclus dans formateur
+        "email", "e mail", "organisation", "departement", "jcmsplugin",
+        "temps", "taux", "score", "tentative", "reussite", "question", "nombre de question", "nom"
     ]
 
     colonnes_utiles = [
@@ -66,10 +63,12 @@ if uploaded_file:
     ]
     df = df[colonnes_utiles]
 
-    # --- Suppression des lignes sans évaluation ---
-    colonnes_eval = [c for c in df.columns if "eval" in c or "commentaire" in c or "observation" in c]
-    if colonnes_eval:
-        df = df.dropna(how="all", subset=colonnes_eval)
+    # --- Groupes de colonnes par thématique ---
+    app_non_evalues_cols = [c for c in df.columns if "non soumis" in c]
+    app_evalues_cols = [c for c in df.columns if "app evalue" in c or "app évalué" in c]
+    axe_prog_cols = [c for c in df.columns if "axe de progression" in c]
+    points_ancrage_cols = [c for c in df.columns if "points d ancrage" in c or "ancrage" in c]
+    app_proposes_cols = [c for c in df.columns if "app qui pourraient" in c or "proposes" in c]
 
     # --- Tri des données ---
     if date_col:
@@ -84,9 +83,11 @@ if uploaded_file:
         styles = getSampleStyleSheet()
 
         # --- Styles personnalisés ---
-        titre_style = ParagraphStyle("TitrePrincipal", parent=styles["Title"], alignment=TA_CENTER, textColor="#003366")
-        sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor="#006699")
+        titre_style = ParagraphStyle("TitrePrincipal", parent=styles["Title"], alignment=TA_CENTER, textColor=HexColor("#003366"))
+        sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor=HexColor("#006699"))
         champ_style = ParagraphStyle("Champ", parent=styles["Normal"], spaceAfter=6)
+        section_style = ParagraphStyle("Section", parent=styles["Heading3"], textColor=HexColor("#004C99"), spaceBefore=12, spaceAfter=6, underlineWidth=0.5)
+        contenu_style = ParagraphStyle("Contenu", parent=styles["Normal"], leftIndent=12, spaceAfter=4)
 
         elements = []
 
@@ -97,27 +98,61 @@ if uploaded_file:
             elements.append(Spacer(1, 8))
 
             for _, ligne in data_stagiaire.iterrows():
-                # --- Date ---
-                if date_col and date_col in ligne and pd.notna(ligne[date_col]):
+                # --- Informations générales ---
+                if date_col and pd.notna(ligne.get(date_col)):
                     elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
-
-                # --- Formateur ---
-                if "formateur" in ligne and isinstance(ligne["formateur"], str) and ligne["formateur"].strip():
-                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur'].strip()}", champ_style))
-
-                elements.append(Spacer(1, 8))
-
-                # --- Autres infos ---
-                for col, val in ligne.items():
-                    if pd.notna(val) and col not in [stagiaire_col, prenom_col, nom_col, date_col, "formateur"]:
-                        col_affiche = col.capitalize().replace("_", " ")
-                        elements.append(Paragraph(f"<b>{col_affiche} :</b> {val}", champ_style))
-
-                elements.append(Spacer(1, 10))
-                elements.append(Paragraph("<hr width='100%' color='#AAAAAA'/>", styles["Normal"]))
+                if ligne.get("formateur"):
+                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
                 elements.append(Spacer(1, 10))
 
-            elements.append(PageBreak())
+                # --- Section : APP non soumis à évaluation ---
+                if app_non_evalues_cols:
+                    elements.append(Paragraph("🟡 APP non soumis à évaluation", section_style))
+                    for c in app_non_evalues_cols:
+                        val = ligne.get(c)
+                        if pd.notna(val):
+                            elements.append(Paragraph(f"• {c.capitalize()} : {val}", contenu_style))
+                    elements.append(Spacer(1, 8))
+
+                # --- Section : APP évalués ---
+                if app_evalues_cols:
+                    elements.append(Paragraph("🟢 APP évalués", section_style))
+                    for c in app_evalues_cols:
+                        val = ligne.get(c)
+                        if pd.notna(val):
+                            elements.append(Paragraph(f"• {c.capitalize()} : {val}", contenu_style))
+                    elements.append(Spacer(1, 8))
+
+                # --- Section : Axe de progression ---
+                if axe_prog_cols:
+                    elements.append(Paragraph("🔵 Axes de progression", section_style))
+                    for c in axe_prog_cols:
+                        val = ligne.get(c)
+                        if pd.notna(val):
+                            elements.append(Paragraph(f"• {val}", contenu_style))
+                    elements.append(Spacer(1, 8))
+
+                # --- Section : Points d’ancrage ---
+                if points_ancrage_cols:
+                    elements.append(Paragraph("🟠 Points d’ancrage", section_style))
+                    for c in points_ancrage_cols:
+                        val = ligne.get(c)
+                        if pd.notna(val):
+                            elements.append(Paragraph(f"• {val}", contenu_style))
+                    elements.append(Spacer(1, 8))
+
+                # --- Section : APP qui pourraient être proposés ---
+                if app_proposes_cols:
+                    elements.append(Paragraph("🟣 APP qui pourraient être proposés", section_style))
+                    for c in app_proposes_cols:
+                        val = ligne.get(c)
+                        if pd.notna(val):
+                            elements.append(Paragraph(f"• {val}", contenu_style))
+                    elements.append(Spacer(1, 8))
+
+                # --- Séparation ---
+                elements.append(Paragraph("<hr width='100%' color='#CCCCCC'/>", styles["Normal"]))
+                elements.append(PageBreak())
 
         doc.build(elements)
         buffer.seek(0)
