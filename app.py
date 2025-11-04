@@ -92,8 +92,7 @@ def coloriser_valeur(val):
     elif val == "NA":
         return f"<font color='#C00000'><b>{val}</b></font>"  # rouge
     else:
-        return val 
-       
+        return val   
     # --- Génération du PDF ---
     if st.button("📄 Générer les fiches PDF"):
         buffer = BytesIO()
