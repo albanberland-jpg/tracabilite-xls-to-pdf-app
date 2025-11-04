@@ -137,6 +137,7 @@ if st.button("📄 Générer les fiches PDF"):
         allowWidows=0,
         fontName="Helvetica",
         fontSize=10,
+        allowHTML=True,          # <--- autorise les balises HTML
     )
 
     # --- Fonction de coloration des valeurs ---
