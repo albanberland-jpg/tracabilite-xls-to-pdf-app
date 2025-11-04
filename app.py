@@ -42,19 +42,17 @@ def valeur_cle(val):
 # ---------------- coloriser ----------------
 def coloriser_valeur_html(val):
     key = valeur_cle(val)
-    mapping = [
-        ("FAIT", "#007A33"),     # vert foncé
-        ("ENCOURS", "#FFD700"),  # jaune
-        ("NE", "#808080"),       # gris
-        ("NA", "#C00000"),       # rouge
-        ("ECA", "#ED7D31"),      # orange
-        ("A", "#00B050"),        # vert clair
-    ]
-    for k, hexc in mapping:
-        if key == k:
-            display = nettoyer_texte_visible(val)
-            return f"<font color='{hexc}'><b>{display}</b></font>"
-    return f"{nettoyer_texte_visible(val)}"
+    mapping = {
+        "FAIT": "#00B050",      # vert
+        "ENCOURS": "#FFD700",   # jaune
+        "NE": "#808080",        # gris
+        "NA": "#C00000",        # rouge
+        "ECA": "#ED7D31",       # orange
+        "A": "#007A33"          # vert foncé
+    }
+    color = mapping.get(key, "#000000")
+    txt = nettoyer_texte_visible(val)
+    return f"<font color='{color}'><b>{txt}</b></font>"
 
 # ---------------- main app ----------------
 if uploaded_file:
@@ -71,7 +69,7 @@ if uploaded_file:
         st.error("Colonne stagiaire non trouvée — vérifie l'en-tête du fichier.")
         st.stop()
 
-    if prenom_col and nom_col and prenom_col in df.columns and nom_col in df.columns:
+    if prenom_col and nom_col:
         df["formateur"] = df[prenom_col].astype(str).str.strip() + " " + df[nom_col].astype(str).str.strip()
     else:
         df["formateur"] = ""
@@ -82,33 +80,30 @@ if uploaded_file:
     ancrage_cols = [c for c in df.columns if "ancrage" in c or "point_d_ancrage" in c or "point_d'anc" in c]
     app_prop_cols = [c for c in df.columns if "app_qui_pourrait" in c or "app_qui_peut" in c or "propose" in c]
 
-    st.write("✅ Colonnes repérées :")
-    st.write(" - app_non:", app_non_eval_cols)
-    st.write(" - app_eval:", app_eval_cols)
-    st.write(" - axes:", axes_cols)
-    st.write(" - ancrage:", ancrage_cols)
-    st.write(" - app_propose:", app_prop_cols)
-
     # PDF styles
     styles = getSampleStyleSheet()
-    titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1, textColor=colors.HexColor("#003366"), spaceAfter=12)
-    section_style = ParagraphStyle("Section", parent=styles["Heading3"], textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
-    item_style = ParagraphStyle("Item", parent=styles["Normal"], spaceAfter=4, leftIndent=8)
+    titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1,
+                                 textColor=colors.HexColor("#007A33"), spaceAfter=12)
+    section_style = ParagraphStyle("Section", parent=styles["Heading3"],
+                                   textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
+    item_style = ParagraphStyle("Item", parent=styles["Normal"],
+                                spaceAfter=4, leftIndent=8, allowHTML=True)
 
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50)
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50)
     elements = []
 
     for stagiaire, group in df.groupby(stagiaire_col):
         for idx, row in group.iterrows():
             elements.append(Paragraph("Fiche d’évaluation", titre_style))
-            elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_style, allowHTML=True))
+            elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_style))
             if date_col:
-                elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(row.get(date_col,''))}", item_style, allowHTML=True))
-            elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(row.get('formateur',''))}", item_style, allowHTML=True))
+                elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(row.get(date_col,''))}", item_style))
+            elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(row.get('formateur',''))}", item_style))
             elements.append(Spacer(1, 8))
 
-            # Sections :
+            # Sections
             def add_section(title, cols):
                 elements.append(Paragraph(title, section_style))
                 any_item = False
@@ -117,11 +112,11 @@ if uploaded_file:
                     if pd.notna(v) and str(v).strip() not in ["", "nan"]:
                         nom_app = nettoyer_texte_visible(c.split("/")[-1])
                         elements.append(
-                            Paragraph(f"• {nom_app} : {coloriser_valeur_html(v)}", item_style, allowHTML=True)
+                            Paragraph(f"- {nom_app} : {coloriser_valeur_html(v)}", item_style)
                         )
                         any_item = True
                 if not any_item:
-                    elements.append(Paragraph("Aucun item", item_style, allowHTML=True))
+                    elements.append(Paragraph("Aucun item", item_style))
                 elements.append(Spacer(1, 6))
 
             if app_non_eval_cols:
@@ -138,5 +133,6 @@ if uploaded_file:
     doc.build(elements)
     buffer.seek(0)
 
-    st.success("PDF prêt.")
-    st.download_button("Télécharger le PDF", data=buffer.getvalue(), file_name="fiches_evaluations.pdf", mime="application/pdf")
+    st.success("✅ PDF prêt.")
+    st.download_button("Télécharger le PDF", data=buffer.getvalue(),
+                       file_name="fiches_evaluations.pdf", mime="application/pdf")
