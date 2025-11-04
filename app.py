@@ -33,7 +33,7 @@ if uploaded_file:
 
     st.write("🔍 Colonnes importées :", df.columns.tolist())
 
-   # --- Recherche intelligente des colonnes ---
+    # --- Recherche intelligente des colonnes ---
     prenom_col = next((c for c in df.columns if "prenom" in c and "stagiaire" not in c), None)
     nom_col = next((c for c in df.columns if "nom" in c and "stagiaire" not in c and "prenom" not in c), None)
     stagiaire_col = next((c for c in df.columns if any(x in c for x in ["stagiaire", "participant", "eleve"])), None)
