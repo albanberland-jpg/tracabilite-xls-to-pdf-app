@@ -31,9 +31,10 @@ if uploaded_file:
 
     df.columns = [normaliser(c) for c in df.columns]
 
-    # --- Recherche des colonnes ---
+    # --- Recherche des colonnes principales ---
     prenom_col = next((c for c in df.columns if "prenom" in c), None)
-    nom_col = next((c for c in df.columns if "nom" in c and "stagiaire" not in c), None)
+    # évite que "prenom" soit aussi détecté comme nom
+    nom_col = next((c for c in df.columns if "nom" in c and "prenom" not in c and "stagiaire" not in c), None)
     stagiaire_col = next((c for c in df.columns if "stagiaire" in c or "participant" in c or "eleve" in c), None)
     date_col = next((c for c in df.columns if "date" in c), None)
 
@@ -41,28 +42,28 @@ if uploaded_file:
         st.error("❌ Impossible de trouver la colonne du stagiaire évalué.")
         st.stop()
 
-    # --- Création de la colonne 'formateur' avant de filtrer ---
+    # --- Création de la colonne 'formateur' avant filtrage ---
     df["formateur"] = ""
     if prenom_col and nom_col:
         df["formateur"] = df[prenom_col].fillna("") + " " + df[nom_col].fillna("")
+    elif prenom_col:  # fallback si le nom n’est pas trouvé
+        df["formateur"] = df[prenom_col].fillna("")
+    elif nom_col:
+        df["formateur"] = df[nom_col].fillna("")
 
     # --- Colonnes à masquer du PDF ---
     mots_cles_a_masquer = [
-        "email",
-        "organisation",
-        "departement",
-        "jcmsplugin",
-        "temps",
-        "taux",
-        "score",
-        "tentative",
-        "reussite",
-        "question",
-        "nom",  # nom déjà fusionné avec prénom
+        "email", "e mail",  # gère les deux versions
+        "organisation", "departement", "jcmsplugin",
+        "temps", "taux", "score", "tentative",
+        "reussite", "question", "nombre de question",
+        "nom",  # déjà inclus dans formateur
     ]
 
-    # --- Filtrage des colonnes ---
-    colonnes_utiles = [c for c in df.columns if not any(m in c for m in mots_cles_a_masquer)]
+    colonnes_utiles = [
+        c for c in df.columns
+        if not any(m in c for m in mots_cles_a_masquer)
+    ]
     df = df[colonnes_utiles]
 
     # --- Suppression des lignes sans évaluation ---
@@ -101,8 +102,8 @@ if uploaded_file:
                     elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
 
                 # --- Formateur ---
-                if "formateur" in ligne and ligne["formateur"].strip():
-                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
+                if "formateur" in ligne and isinstance(ligne["formateur"], str) and ligne["formateur"].strip():
+                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur'].strip()}", champ_style))
 
                 elements.append(Spacer(1, 8))
 
