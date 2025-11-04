@@ -17,15 +17,21 @@ if uploaded_file:
     st.dataframe(df.head())
 
     # --- Normalisation des noms de colonnes ---
-    df.columns = [c.strip().lower().replace("é", "e").replace("è", "e").replace("ê", "e") for c in df.columns]
+    def normaliser(texte):
+        return (
+            str(texte)
+            .strip()
+            .lower()
+            .replace("é", "e")
+            .replace("è", "e")
+            .replace("ê", "e")
+            .replace("-", " ")
+            .replace("_", " ")
+        )
 
-    # --- Colonnes à masquer du PDF ---
-    colonnes_a_masquer = [
-        "email", "organisation", "departement", "jcmsplugin", "temps", "taux",
-        "score", "tentative", "reussite", "nombre de questions", "nom"  # "nom" masqué, utilisé ailleurs
-    ]
+    df.columns = [normaliser(c) for c in df.columns]
 
-    # --- Recherche intelligente des colonnes ---
+    # --- Recherche des colonnes ---
     prenom_col = next((c for c in df.columns if "prenom" in c), None)
     nom_col = next((c for c in df.columns if "nom" in c and "stagiaire" not in c), None)
     stagiaire_col = next((c for c in df.columns if "stagiaire" in c or "participant" in c or "eleve" in c), None)
@@ -35,8 +41,28 @@ if uploaded_file:
         st.error("❌ Impossible de trouver la colonne du stagiaire évalué.")
         st.stop()
 
-    # --- Nettoyage du DataFrame ---
-    colonnes_utiles = [c for c in df.columns if all(x not in c for x in colonnes_a_masquer)]
+    # --- Création de la colonne 'formateur' avant de filtrer ---
+    df["formateur"] = ""
+    if prenom_col and nom_col:
+        df["formateur"] = df[prenom_col].fillna("") + " " + df[nom_col].fillna("")
+
+    # --- Colonnes à masquer du PDF ---
+    mots_cles_a_masquer = [
+        "email",
+        "organisation",
+        "departement",
+        "jcmsplugin",
+        "temps",
+        "taux",
+        "score",
+        "tentative",
+        "reussite",
+        "question",
+        "nom",  # nom déjà fusionné avec prénom
+    ]
+
+    # --- Filtrage des colonnes ---
+    colonnes_utiles = [c for c in df.columns if not any(m in c for m in mots_cles_a_masquer)]
     df = df[colonnes_utiles]
 
     # --- Suppression des lignes sans évaluation ---
@@ -74,38 +100,16 @@ if uploaded_file:
                 if date_col and date_col in ligne and pd.notna(ligne[date_col]):
                     elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
 
-                # --- Formateur (nom + prénom) ---
-                formateur = ""
-                if prenom_col and prenom_col in ligne:
-                    formateur += str(ligne[prenom_col]) + " "
-                if nom_col and nom_col in ligne:
-                    formateur += str(ligne[nom_col])
-                if formateur.strip():
-                    elements.append(Paragraph(f"<b>Formateur :</b> {formateur.strip()}", champ_style))
+                # --- Formateur ---
+                if "formateur" in ligne and ligne["formateur"].strip():
+                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
 
                 elements.append(Spacer(1, 8))
 
                 # --- Autres infos ---
                 for col, val in ligne.items():
-                    if pd.notna(val) and col not in [stagiaire_col, nom_col, prenom_col, date_col]:
+                    if pd.notna(val) and col not in [stagiaire_col, prenom_col, nom_col, date_col, "formateur"]:
                         col_affiche = col.capitalize().replace("_", " ")
                         elements.append(Paragraph(f"<b>{col_affiche} :</b> {val}", champ_style))
 
                 elements.append(Spacer(1, 10))
-                elements.append(Paragraph("<hr width='100%' color='#AAAAAA'/>", styles["Normal"]))
-                elements.append(Spacer(1, 10))
-
-            elements.append(PageBreak())
-
-        doc.build(elements)
-        buffer.seek(0)
-
-        st.download_button(
-            label="⬇️ Télécharger les fiches PDF",
-            data=buffer,
-            file_name="fiches_evaluations.pdf",
-            mime="application/pdf"
-        )
-
-else:
-    st.info("📂 En attente du fichier Excel (.xlsx) à importer.")
