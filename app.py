@@ -157,7 +157,11 @@ if st.button("📄 Générer les fiches PDF"):
         return val
 
     elements = []
-elements.append(Paragraph("Test <font color='#FF0000'><b>rouge</b></font>", contenu_style))
+ 
+    # 🔴 TEST TEMPORAIRE — doit apparaître en rouge
+    elements.append(Paragraph("Test <font color='#FF0000'><b>rouge</b></font>", contenu_style))
+    elements.append(Spacer(1, 12))
+
 for stagiaire, data_stagiaire in groupes_stagiaires:
         elements.append(Paragraph("📘 Fiche d’évaluation", titre_style))
         elements.append(Spacer(1, 12))
