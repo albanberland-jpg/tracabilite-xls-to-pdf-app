@@ -144,19 +144,19 @@ if st.button("📄 Générer les fiches PDF"):
                 if app_non_evalues_cols:
                     elements.append(Paragraph("APP non soumis à évaluation", section_style))
                     for c in app_non_evalues_cols:
-                        val = nettoyer_texte(ligne.get(c))
+                         val = ligne.get(c)
                         if pd.notna(val):
-                            elements.append(Paragraph(f"• {nom_app(c)} : {val}", contenu_style))
-                    elements.append(Spacer(1, 6))
+                            texte_colore = coloriser_valeur(str(val))
+                    elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
 
                 # --- Section : APP évalués ---
                 if app_evalues_cols:
                     elements.append(Paragraph("APP évalués", section_style))
                     for c in app_evalues_cols:
-                        val = nettoyer_texte(ligne.get(c))
+                        val = ligne.get(c)
                         if pd.notna(val):
-                            elements.append(Paragraph(f"• {nom_app(c)} : {val}", contenu_style))
-                    elements.append(Spacer(1, 6))
+                            texte_colore = coloriser_valeur(str(val))
+                    elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
 
                 # --- Section : Axes de progression ---
                 if axe_prog_cols:
