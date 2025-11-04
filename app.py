@@ -234,7 +234,7 @@ if st.button("📄 Générer les fiches PDF"):
     doc.build(elements)
     buffer.seek(0)
 
-        st.download_button(
+    st.download_button(
             label="⬇️ Télécharger les fiches PDF",
             data=buffer,
             file_name="fiches_evaluations.pdf",
