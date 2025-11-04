@@ -94,7 +94,7 @@ def coloriser_valeur(val):
     else:
         return val   
         
-   # --- Génération du PDF ---
+ # --- Génération du PDF ---
 if st.button("📄 Générer les fiches PDF"):
     from io import BytesIO
     from reportlab.lib.pagesizes import A4
@@ -126,26 +126,22 @@ if st.button("📄 Générer les fiches PDF"):
         textColor=HexColor("#004C99"),
         spaceBefore=12,
         spaceAfter=6,
-        underlineWidth=0.5,
     )
     contenu_style = ParagraphStyle(
         "Contenu",
         parent=styles["Normal"],
         leftIndent=12,
         spaceAfter=4,
-        allowOrphans=0,
-        allowWidows=0,
         fontName="Helvetica",
         fontSize=10,
-        allowHTML=True,          # <--- autorise les balises HTML
+        textColor=HexColor("#000000"),  # par défaut noir
     )
 
-    # --- Fonction de coloration des valeurs ---
+    # --- Fonction coloration ---
     def coloriser_valeur(val):
         """Retourne le texte coloré selon la valeur d'évaluation."""
         if not isinstance(val, str):
             return str(val)
-
         val = val.strip().upper()
         couleurs = {
             "FAIT": "#007A33",     # vert foncé
@@ -157,7 +153,7 @@ if st.button("📄 Générer les fiches PDF"):
         }
         couleur = couleurs.get(val)
         if couleur:
-            return f'<font color="{couleur}"><b>{val}</b></font>'
+            return f'<b><font color="{couleur}">{val}</font></b>'
         return val
 
     elements = []
@@ -169,9 +165,9 @@ if st.button("📄 Générer les fiches PDF"):
         elements.append(Spacer(1, 8))
 
         for _, ligne in data_stagiaire.iterrows():
-            # --- Informations générales ---
+            # --- Infos générales ---
             if date_col and pd.notna(ligne.get(date_col)):
-                elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
+                elements.append(Paragraph(f"<b>Date d’évaluation :</b> {ligne[date_col]}", champ_style))
             if ligne.get("formateur"):
                 elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
             elements.append(Spacer(1, 10))
@@ -182,10 +178,10 @@ if st.button("📄 Générer les fiches PDF"):
                 for c in app_non_evalues_cols:
                     val = ligne.get(c)
                     if pd.notna(val):
-                        texte_val = coloriser_valeur(str(val))
+                        texte_val = coloriser_valeur(val)
                         nom_app = c.split("/")[-1].strip().capitalize()
-                        texte = f"• {nom_app} : {texte_val}"
-                        elements.append(Paragraph(texte, contenu_style))
+                        texte_html = f"• {nom_app} : {texte_val}"
+                        elements.append(Paragraph(texte_html, contenu_style))
                 elements.append(Spacer(1, 8))
 
             # --- Section : APP évalués ---
@@ -194,10 +190,10 @@ if st.button("📄 Générer les fiches PDF"):
                 for c in app_evalues_cols:
                     val = ligne.get(c)
                     if pd.notna(val):
-                        texte_val = coloriser_valeur(str(val))
+                        texte_val = coloriser_valeur(val)
                         nom_app = c.split("/")[-1].strip().capitalize()
-                        texte = f"• {nom_app} : {texte_val}"
-                        elements.append(Paragraph(texte, contenu_style))
+                        texte_html = f"• {nom_app} : {texte_val}"
+                        elements.append(Paragraph(texte_html, contenu_style))
                 elements.append(Spacer(1, 8))
 
             # --- Section : Axes de progression ---
@@ -236,8 +232,8 @@ if st.button("📄 Générer les fiches PDF"):
     buffer.seek(0)
 
     st.download_button(
-            label="⬇️ Télécharger les fiches PDF",
-            data=buffer,
-            file_name="fiches_evaluations.pdf",
-            mime="application/pdf"
-        )
+        label="⬇️ Télécharger les fiches PDF",
+        data=buffer,
+        file_name="fiches_evaluations.pdf",
+        mime="application/pdf",
+    )
