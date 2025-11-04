@@ -2,171 +2,113 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib import colors
 import re
 
-st.set_page_config(page_title="Traçabilité XLS → PDF", layout="centered")
+st.title("📘 Générateur de fiches d'évaluation")
 
-st.title("📄 Générateur de fiches d’évaluation (XLS → PDF)")
+uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xlsx"])
 
-uploaded_file = st.file_uploader("📤 Importer un fichier Excel (.xlsx)", type=["xlsx"])
-
-# ----------------------------------------------------------
-# 🎨 Fonction pour coloriser les valeurs selon leur état
-# ----------------------------------------------------------
+# --- Fonction de coloration conditionnelle ---
 def coloriser_valeur(val):
     if not isinstance(val, str):
-        val = str(val)
+        return str(val)
     val = val.strip().upper()
+    couleurs = {
+        "FAIT": "#007A33",       # vert foncé
+        "A": "#00B050",          # vert clair
+        "EN COURS": "#FFD700",   # jaune
+        "ECA": "#ED7D31",        # orange
+        "NE": "#808080",         # gris
+        "NA": "#C00000",         # rouge
+    }
+    for mot, couleur in couleurs.items():
+        if mot in val:
+            return f"<font color='{couleur}'><b>{val}</b></font>"
+    return val
 
-    if val == "FAIT":
-        return f"<font color='#007A33'><b>{val}</b></font>"  # Vert foncé
-    elif val == "A":
-        return f"<font color='#00B050'><b>{val}</b></font>"  # Vert clair
-    elif val == "EN COURS":
-        return f"<font color='#FFD700'><b>{val}</b></font>"  # Jaune
-    elif val == "ECA":
-        return f"<font color='#ED7D31'><b>{val}</b></font>"  # Orange
-    elif val == "NE":
-        return f"<font color='#808080'><b>{val}</b></font>"  # Gris
-    elif val == "NA":
-        return f"<font color='#C00000'><b>{val}</b></font>"  # Rouge
-    else:
-        return val
-
-# ----------------------------------------------------------
-# 🧹 Nettoyage des intitulés
-# ----------------------------------------------------------
-def nettoyer_intitule(texte):
+# --- Fonction de nettoyage du texte ---
+def nettoyer_texte(texte):
     if not isinstance(texte, str):
-        return texte
-    texte = re.sub(r"[_\-]+", " ", texte)  # supprime _ et -
-    texte = re.sub(r"\s+", " ", texte)  # supprime les doubles espaces
-    texte = texte.strip().capitalize()
-    return texte
+        return ""
+    texte = re.sub(r"[■•_🚤🌊⛱🐟🔵\-]+", " ", texte)
+    return texte.strip().capitalize()
 
-# ----------------------------------------------------------
-# 📄 Génération du PDF
-# ----------------------------------------------------------
-def generer_pdf(df):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            rightMargin=40, leftMargin=40, topMargin=60, bottomMargin=40)
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
 
-    styles = getSampleStyleSheet()
-    style_titre = ParagraphStyle(
-        "Titre",
-        parent=styles["Heading1"],
-        alignment=TA_CENTER,
-        textColor="#003366",
-        spaceAfter=20,
-    )
-    style_soustitre = ParagraphStyle(
-        "SousTitre",
-        parent=styles["Heading2"],
-        textColor="#003366",
-        spaceAfter=10,
-    )
-    style_normal = ParagraphStyle(
-        "Normal",
-        parent=styles["BodyText"],
-        alignment=TA_LEFT,
-        spaceAfter=6,
-        leading=15,
-    )
+    st.write("🔍 Colonnes importées :", list(df.columns))
 
-    elements = []
+    # Identifier les colonnes principales (en ignorant les majuscules/minuscules)
+    def trouver_colonne(nom_recherche):
+        for c in df.columns:
+            if nom_recherche.lower() in c.lower():
+                return c
+        return None
 
-    # Vérif colonnes
-    colonnes = [c.lower() for c in df.columns]
-    st.write("🔍 Colonnes importées :", colonnes)
+    prenom_col = trouver_colonne("prenom")
+    nom_col = trouver_colonne("nom")
+    stagiaire_col = trouver_colonne("stagiaire_evalue")
+    date_col = trouver_colonne("date")
 
-    # Recherche auto des colonnes clés
-    prenom_col = next((c for c in df.columns if "prenom" in c.lower()), None)
-    nom_col = next((c for c in df.columns if "nom" in c.lower()), None)
-    stagiaire_col = next((c for c in df.columns if "stagiaire" in c.lower()), None)
-    date_col = next((c for c in df.columns if "date" in c.lower()), None)
-
-    st.write(f"🧾 Colonnes détectées → prenom: {prenom_col}, nom: {nom_col}, stagiaire: {stagiaire_col}, date: {date_col}")
-
-    # Ajout colonne formateur
     if prenom_col and nom_col:
         df["formateur"] = df[prenom_col].astype(str) + " " + df[nom_col].astype(str)
     else:
         st.warning("⚠️ Colonnes 'prenom' et/ou 'nom' introuvables — le champ 'formateur' sera laissé vide.")
         df["formateur"] = ""
 
-    # Groupement par stagiaire
-    if stagiaire_col:
-        groupes_stagiaires = df.groupby(stagiaire_col)
-    else:
-        st.error("❌ Colonne 'stagiaire' introuvable dans le fichier.")
-        return None
+    groupes_stagiaires = df.groupby(stagiaire_col)
 
-    # Test couleur
-    elements.append(Paragraph("Test <font color='#FF0000'><b>rouge</b></font>", style_normal))
-    elements.append(Spacer(1, 10))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=40, bottomMargin=40)
+
+    styles = getSampleStyleSheet()
+    titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], textColor=colors.HexColor("#003366"), spaceAfter=10)
+    sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor=colors.HexColor("#003366"), spaceAfter=8)
+    texte_style = ParagraphStyle("Texte", parent=styles["Normal"], fontSize=11, leading=14, spaceAfter=6)
+
+    elements = []
+    elements.append(Paragraph("Test <font color='#FF0000'><b>rouge</b></font>", texte_style))
+    elements.append(Spacer(1, 12))
 
     for stagiaire, data_stagiaire in groupes_stagiaires:
-        elements.append(Paragraph("■ Fiche d’évaluation", style_titre))
+        elements.append(Paragraph("■ Fiche d’évaluation", titre_style))
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", texte_style))
+        if date_col in data_stagiaire:
+            elements.append(Paragraph(f"<b>Évaluation du :</b> {data_stagiaire[date_col].iloc[0]}", texte_style))
+        elements.append(Paragraph(f"<b>Formateur :</b> {data_stagiaire['formateur'].iloc[0]}", texte_style))
         elements.append(Spacer(1, 10))
 
-        formateur = data_stagiaire["formateur"].iloc[0]
-        date_eval = data_stagiaire[date_col].iloc[0] if date_col else ""
+        # --- Sections principales ---
+        sections = {
+            "APP non soumis à évaluation": "app_non_soumis_a_evaluation",
+            "APP évalués": "app_evalues",
+            "Axes de progression": "axes_de_progression",
+            "Points d'ancrage": "point_d",
+            "APP qui pourraient être proposés": "app_qui_pourrait",
+        }
 
-        elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", style_normal))
-        elements.append(Paragraph(f"<b>Évaluation du :</b> {date_eval}", style_normal))
-        elements.append(Paragraph(f"<b>Formateur :</b> {formateur}", style_normal))
-        elements.append(Spacer(1, 15))
+        for titre, mot_clef in sections.items():
+            cols = [c for c in df.columns if mot_clef in c.lower()]
+            if not cols:
+                continue
 
-        # Section 1
-        elements.append(Paragraph("■ APP non soumis à évaluation", style_soustitre))
-        for col in [c for c in df.columns if "non_soumis" in c.lower()]:
-            val = coloriser_valeur(data_stagiaire[col].iloc[0])
-            titre = nettoyer_intitule(col.split("/")[-1])
-            elements.append(Paragraph(f"{titre} : {val}", style_normal))
-        elements.append(Spacer(1, 10))
+            elements.append(Paragraph(f"■ {titre}", sous_titre_style))
+            for col in cols:
+                valeur = str(data_stagiaire[col].iloc[0]).strip()
+                if valeur and valeur not in ["nan", ""]:
+                    # Nettoyer l’intitulé
+                    nom_app = nettoyer_texte(col.split("/")[-1])
+                    # Coloriser la valeur
+                    valeur_coloree = coloriser_valeur(valeur)
+                    elements.append(Paragraph(f"• {nom_app} : {valeur_coloree}", texte_style))
+            elements.append(Spacer(1, 10))
 
-        # Section 2
-        elements.append(Paragraph("■ APP évalués", style_soustitre))
-        for col in [c for c in df.columns if "app_evalue" in c.lower()]:
-            val = coloriser_valeur(data_stagiaire[col].iloc[0])
-            titre = nettoyer_intitule(col.split("/")[-1])
-            elements.append(Paragraph(f"{titre} : {val}", style_normal))
-        elements.append(Spacer(1, 10))
-
-        # Section 3
-        elements.append(Paragraph("■ Axes de progression", style_soustitre))
-        for col in [c for c in df.columns if "axe" in c.lower()]:
-            val = data_stagiaire[col].iloc[0]
-            titre = nettoyer_intitule(col.split("/")[-1])
-            elements.append(Paragraph(f"{titre} : {val}", style_normal))
-
-        elements.append(PageBreak())
+        elements.append(Spacer(1, 20))
 
     doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-# ----------------------------------------------------------
-# 🎯 Interface Streamlit
-# ----------------------------------------------------------
-if uploaded_file:
-    try:
-        df = pd.read_excel(uploaded_file)
-        st.success("✅ Fichier importé avec succès !")
-
-        if st.button("📘 Générer le PDF"):
-            pdf = generer_pdf(df)
-            if pdf:
-                st.download_button(
-                    label="💾 Télécharger le PDF",
-                    data=pdf,
-                    file_name="fiches_evaluations.pdf",
-                    mime="application/pdf",
-                )
-
-    except Exception as e:
-        st.error(f"Erreur lors de la lecture du fichier : {e}")
+    st.success("✅ PDF généré avec succès !")
+    st.download_button("📄 Télécharger le PDF", data=buffer.getvalue(), file_name="fiches_evaluations.pdf")
