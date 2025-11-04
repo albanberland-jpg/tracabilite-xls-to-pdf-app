@@ -35,4 +35,77 @@ if uploaded_file:
         st.error("❌ Impossible de trouver la colonne du stagiaire évalué.")
         st.stop()
 
-    # --- Nettoyage
+    # --- Nettoyage du DataFrame ---
+    colonnes_utiles = [c for c in df.columns if all(x not in c for x in colonnes_a_masquer)]
+    df = df[colonnes_utiles]
+
+    # --- Suppression des lignes sans évaluation ---
+    colonnes_eval = [c for c in df.columns if "eval" in c or "commentaire" in c or "observation" in c]
+    if colonnes_eval:
+        df = df.dropna(how="all", subset=colonnes_eval)
+
+    # --- Tri des données ---
+    if date_col:
+        df = df.sort_values(by=[stagiaire_col, date_col])
+
+    groupes_stagiaires = df.groupby(stagiaire_col)
+
+    # --- Génération du PDF ---
+    if st.button("📄 Générer les fiches PDF"):
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+
+        # --- Styles personnalisés ---
+        titre_style = ParagraphStyle("TitrePrincipal", parent=styles["Title"], alignment=TA_CENTER, textColor="#003366")
+        sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor="#006699")
+        champ_style = ParagraphStyle("Champ", parent=styles["Normal"], spaceAfter=6)
+
+        elements = []
+
+        for stagiaire, data_stagiaire in groupes_stagiaires:
+            elements.append(Paragraph("📘 Fiche d’évaluation", titre_style))
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", sous_titre_style))
+            elements.append(Spacer(1, 8))
+
+            for _, ligne in data_stagiaire.iterrows():
+                # --- Date ---
+                if date_col and date_col in ligne and pd.notna(ligne[date_col]):
+                    elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
+
+                # --- Formateur (nom + prénom) ---
+                formateur = ""
+                if prenom_col and prenom_col in ligne:
+                    formateur += str(ligne[prenom_col]) + " "
+                if nom_col and nom_col in ligne:
+                    formateur += str(ligne[nom_col])
+                if formateur.strip():
+                    elements.append(Paragraph(f"<b>Formateur :</b> {formateur.strip()}", champ_style))
+
+                elements.append(Spacer(1, 8))
+
+                # --- Autres infos ---
+                for col, val in ligne.items():
+                    if pd.notna(val) and col not in [stagiaire_col, nom_col, prenom_col, date_col]:
+                        col_affiche = col.capitalize().replace("_", " ")
+                        elements.append(Paragraph(f"<b>{col_affiche} :</b> {val}", champ_style))
+
+                elements.append(Spacer(1, 10))
+                elements.append(Paragraph("<hr width='100%' color='#AAAAAA'/>", styles["Normal"]))
+                elements.append(Spacer(1, 10))
+
+            elements.append(PageBreak())
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Télécharger les fiches PDF",
+            data=buffer,
+            file_name="fiches_evaluations.pdf",
+            mime="application/pdf"
+        )
+
+else:
+    st.info("📂 En attente du fichier Excel (.xlsx) à importer.")
