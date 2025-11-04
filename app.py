@@ -207,8 +207,6 @@ if uploaded_file:
             file_name="fiches_stagiaires.pdf",
             mime="application/pdf",
         )
-🎨 Détail des Couleurs Appliquées
-La fonction coloriser utilise désormais les codes hexadécimaux suivants pour les notes d'évaluation, assurant une coloration précise :
 
 Note d'Évaluation	Code Hexadécimal	Couleur
 FAIT	#00B050	Vert foncé
@@ -217,14 +215,4 @@ EN COURS	#FFD700	Jaune/Or
 NE	#808080	Gris
 NA	#C00000	Rouge
 ECA	#FF8C00	Orange (Dark Orange)
-J'ai également ajouté une vérification plus robuste dans la fonction coloriser pour s'assurer qu'elle gère correctement les valeurs vides ou NaN de Pandas.
-
-Si vous rencontrez toujours des problèmes, assurez-vous que les valeurs dans votre fichier Excel correspondent exactement aux clés utilisées dans le dictionnaire de la fonction coloriser (après conversion en majuscules et suppression des points).
-
-Avez-vous d'autres sections du code à ajuster ou souhaitez-vous que je vérifie un autre aspect ?
-
-
-
-
-Vérifiez les réponses de Gemini, car il peut se tromper, y compris sur des personnes. Votre confidentialité et GeminiS'ouvre dans une nouvelle fenêtre
 
