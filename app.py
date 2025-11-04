@@ -93,8 +93,9 @@ def coloriser_valeur(val):
         return f"<font color='#C00000'><b>{val}</b></font>"  # rouge
     else:
         return val   
+        
     # --- Génération du PDF ---
-    if st.button("📄 Générer les fiches PDF"):
+        if st.button("📄 Générer les fiches PDF"):
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
                                 leftMargin=40, rightMargin=40,
