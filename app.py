@@ -228,7 +228,7 @@ for stagiaire, data_stagiaire in groupes_stagiaires:
             elements.append(Paragraph("<hr width='100%' color='#CCCCCC'/>", styles["Normal"]))
             elements.append(PageBreak())
 
-    doc.build(elements)
+doc.build(elements)
     buffer.seek(0)
 
     st.download_button(
