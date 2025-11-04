@@ -208,10 +208,20 @@ if uploaded_file:
             mime="application/pdf",
         )
 
-FAIT	#00B050	Vert foncé
-A	#32CD32	Vert clair (Légèrement différent de FAIT)
-EN COURS	#FFD700	Jaune/Or
-NE	#808080	Gris
-NA	#C00000	Rouge
-ECA	#FF8C00	Orange (Dark Orange)
+couleurs = {
+        # "fait" en vert
+        "FAIT": colors.HexColor("#00B050"), 
+        # "A" en vert légèrement différent
+        "A": colors.HexColor("#32CD32"), 
+        # "en cours" en jaune
+        "EN COURS": colors.HexColor("#FFD700"), 
+        # "NE" en gris
+        "NE": colors.HexColor("#808080"), 
+        # "NA" en rouge
+        "NA": colors.HexColor("#C00000"), 
+        # "ECA" en orange
+        "ECA": colors.HexColor("#FF8C00"), 
+    }
 
+    c = couleurs.get(val_normalisee)
+    # ... (fin de la fonction coloriser)
