@@ -43,12 +43,12 @@ def valeur_cle(val):
 def coloriser_valeur_html(val):
     key = valeur_cle(val)
     mapping = {
-        "FAIT": "#00B050",      # vert
-        "ENCOURS": "#FFD700",   # jaune
-        "NE": "#808080",        # gris
-        "NA": "#C00000",        # rouge
-        "ECA": "#ED7D31",       # orange
-        "A": "#007A33"          # vert foncé
+        "Fait": "#00B050",      # vert
+        "En cours": "#FFD700",   # jaune
+        "N.E.": "#808080",        # gris
+        "N.A.": "#C00000",        # rouge
+        "E.C.A.": "#ED7D31",       # orange
+        "A.": "#007A33"          # vert foncé
     }
     color = mapping.get(key, "#000000")
     txt = nettoyer_texte_visible(val)
