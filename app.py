@@ -3,16 +3,30 @@ import pandas as pd
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch # Pour définir la largeur des colonnes
 import unicodedata, re
 
 st.set_page_config(page_title="Tracabilité XLS → PDF", layout="centered")
 st.title("📘 Générateur de fiches d’évaluation")
+st.write("Ce script génère un PDF récapitulatif avec des tableaux colorés (couleur de fond de cellule).")
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel (.xlsx)", type=["xlsx"])
 
-# --- Nettoyage des noms de colonnes ---
+# --- COULEURS DE FOND DE CELLULE (Utilisation des couleurs ReportLab natives) ---
+COULEURS_FOND = {
+    "FAIT": colors.HexColor("#A9D18E"),    # Vert clair Excel
+    "A": colors.HexColor("#70AD47"),       # Vert Excel
+    "ENCOURS": colors.HexColor("#FFC000"), # Jaune/Orange Excel
+    "ECA": colors.HexColor("#ED7D31"),     # Orange Excel
+    "NE": colors.HexColor("#D9D9D9"),      # Gris clair
+    "NA": colors.HexColor("#F8CBAD"),      # Rouge très clair
+    "THEORIE": colors.HexColor("#DEEBF6"), # Bleu clair pour Théorie (en-tête)
+    "APP": colors.HexColor("#FBE5D6"),     # Orange clair pour APP (en-tête)
+}
+
+# --- Utilities (Identiques pour la robustesse) ---
 def normaliser_colname(name):
     s = str(name)
     s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
@@ -21,49 +35,77 @@ def normaliser_colname(name):
     s = re.sub(r"[^a-z0-9_/()'’.-]", "", s)
     return s
 
-# --- Nettoyage du texte pour affichage (Correction du problème des carrés noirs) ---
 def nettoyer_texte_visible(txt):
     if pd.isna(txt):
         return ""
     s = str(txt)
-    # Remplacer les symboles et caractères non désirés par des espaces
-    # Inclut les carrés noirs courants, les tirets spéciaux, et les espaces zéro-largeur
     s = re.sub(r"[_•■\u25a0\u200b\u2013\u2014]", " ", s) 
-    # Normalisation Unicode pour un nettoyage plus large des caractères non standards
-    # Utilisation de NFKD + encodage/décodage pour supprimer les caractères non ASCII sans les accents valides
     s = unicodedata.normalize("NFKD", s).encode('ascii', 'ignore').decode('utf-8')
-    # Remplacer les multiples espaces par un seul
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-# --- Conversion d'une valeur en clé standardisée ---
 def valeur_cle(val):
     if pd.isna(val):
         return ""
     s = str(val).upper()
     s = s.replace(".", "").replace(" ", "").strip()
-    # Retirer les accents pour la clé de mapping
     s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
     return s
 
-# --- Application du code couleur HTML (Sécurisé pour ReportLab) ---
-def coloriser_valeur_html(val):
-    key = valeur_cle(val)
+# --- Fonction de génération de tableau ---
+def generate_app_table(title, cols, row, item_style, item_bold_style):
+    data = []
+    styles = []
     
-    mapping = {
-        "FAIT": colors.HexColor("#00B050"),    # vert clair
-        "A": colors.HexColor("#007A33"),       # vert foncé
-        "ENCOURS": colors.HexColor("#FFD700"),  # jaune
-        "ECA": colors.HexColor("#ED7D31"),     # orange
-        "NE": colors.HexColor("#808080"),      # gris
-        "NA": colors.HexColor("#C00000")       # rouge
-    }
+    # 1. En-tête du tableau (comme dans votre image)
+    header = [
+        Paragraph("<b>Séquence</b>", item_bold_style),
+        Paragraph("<b>Résultats / Évaluations</b>", item_bold_style),
+    ]
+    data.append(header)
     
-    color = mapping.get(key, colors.HexColor("#000000")) 
-    txt = nettoyer_texte_visible(val)
+    # 2. Remplissage des lignes et application des styles
+    row_idx = 1
     
-    # Utilisation de .hexval().lower() pour garantir un formatage que ReportLab comprend
-    return f"<font color='{color.hexval().lower()}'><b>{txt}</b></font>"
+    for c in cols:
+        v = row.get(c, "")
+        if pd.notna(v) and str(v).strip():
+            note_cle = valeur_cle(v)
+            
+            # 2a. Définition des éléments de la ligne
+            nom_app_clean = c.split("/")[-1].replace("_", " ").strip().title()
+            
+            # On utilise le style pour les items (texte noir)
+            cell_nom = Paragraph(nettoyer_texte_visible(nom_app_clean), item_style)
+            cell_valeur = Paragraph(nettoyer_texte_visible(v), item_style)
+            
+            data.append([cell_nom, cell_valeur])
+            
+            # 2b. Application du style de fond
+            if note_cle in COULEURS_FOND:
+                styles.append(
+                    ('BACKGROUND', (0, row_idx), (1, row_idx), COULEURS_FOND[note_cle])
+                )
+            
+            row_idx += 1
+
+    if len(data) == 1: # Seulement l'en-tête
+        return None
+        
+    # 3. Création du tableau et du style général
+    table = Table(data, colWidths=[3.5 * inch, 1.5 * inch])
+    
+    general_style = [
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # Style pour l'en-tête
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#D9E1F2")), # Gris/Bleu clair pour l'en-tête
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'), # Aligne la colonne des notes au centre
+    ]
+    
+    table.setStyle(TableStyle(general_style + styles))
+    return table
 
 # --- Application principale ---
 if uploaded_file:
@@ -104,8 +146,11 @@ if uploaded_file:
     titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1, fontSize=18, textColor=colors.HexColor("#007A33"), spaceAfter=12)
     section_style = ParagraphStyle("Section", parent=styles["Heading3"], fontSize=12, textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
     
-    # POINT CLÉ : allowHTML=True est ABSOLUMENT nécessaire pour les couleurs
-    item_style = ParagraphStyle("Item", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=3, leftIndent=15, allowHTML=True)
+    # Styles pour le texte normal des cellules du tableau
+    item_style = ParagraphStyle("Item", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, allowHTML=False)
+    # Style pour le texte en gras des en-têtes de tableau (si nécessaire)
+    item_bold_style = ParagraphStyle("ItemBold", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, fontName='Helvetica-Bold')
+
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50)
@@ -126,38 +171,46 @@ if uploaded_file:
         elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(first_row.get('formateur_display', ''))}", item_style))
         elements.append(Spacer(1, 8))
 
-        # Fonction d'ajout de section
-        def add_section(title, cols):
+        # --- GESTION DES SECTIONS APP EN TABLEAUX ---
+        
+        # 1. APP non soumis à évaluation
+        elements.append(Paragraph(f"<b>APP non soumis à évaluation</b>", section_style))
+        table_non_eval = generate_app_table("APP non soumis à évaluation", app_non_eval_cols, first_row, item_style, item_bold_style)
+        if table_non_eval:
+            elements.append(table_non_eval)
+        else:
+            elements.append(Paragraph("Aucun item", item_style))
+        elements.append(Spacer(1, 6))
+
+        # 2. APP évalués
+        elements.append(Paragraph(f"<b>APP évalués</b>", section_style))
+        table_eval = generate_app_table("APP évalués", app_eval_cols, first_row, item_style, item_bold_style)
+        if table_eval:
+            elements.append(table_eval)
+        else:
+            elements.append(Paragraph("Aucun item", item_style))
+        elements.append(Spacer(1, 6))
+
+        # --- GESTION DES SECTIONS TEXTE LIBRE (inchangée) ---
+        
+        # Fonction d'ajout de section (utilisée uniquement pour les blocs texte)
+        def add_text_section(title, cols):
             elements.append(Paragraph(f"<b>{title}</b>", section_style))
             added = False
             for c in cols:
                 v = first_row.get(c, "")
                 if pd.notna(v) and str(v).strip():
-                    nom_app = c.split("/")[-1].replace("_", " ") 
-                    v_str = str(v).strip()
-                    val_display = ""
-                    
-                    # On vérifie si c'est une note courte et reconnue
-                    if len(valeur_cle(v)) < 10 and valeur_cle(v) in ["FAIT", "A", "ENCOURS", "ECA", "NE", "NA"]:
-                        val_display = coloriser_valeur_html(v)
-                    else:
-                        # Si c'est un long texte ou une note non reconnue, on l'affiche simplement
-                        val_display = nettoyer_texte_visible(v)
-                        
-                    
-                    elements.append(Paragraph(f"• {nom_app.strip().title()} : {val_display}", item_style))
+                    elements.append(Paragraph(f"• {nettoyer_texte_visible(v)}", item_style))
                     added = True
             
             if not added:
                 elements.append(Paragraph("Aucun item", item_style))
             elements.append(Spacer(1, 6))
 
-        # Ajout des sections
-        add_section("APP non soumis à évaluation", app_non_eval_cols)
-        add_section("APP évalués", app_eval_cols)
-        add_section("Axes de progression", axes_cols)
-        add_section("Points d’ancrage", ancrage_cols)
-        add_section("APP qui pourraient être proposés", app_prop_cols)
+        # Ajout des sections de texte
+        add_text_section("Axes de progression", axes_cols)
+        add_text_section("Points d’ancrage", ancrage_cols)
+        add_text_section("APP qui pourraient être proposés", app_prop_cols)
 
     # --- Finalisation ---
     if elements:
@@ -166,9 +219,9 @@ if uploaded_file:
             buffer.seek(0)
 
             st.success("✅ PDF généré avec succès.")
-            st.download_button("⬇️ Télécharger le PDF", data=buffer.getvalue(),
-                               file_name="fiches_stagiaires.pdf", mime="application/pdf")
+            st.download_button("⬇️ Télécharger le PDF (Format Tableau)", data=buffer.getvalue(),
+                               file_name="fiches_stagiaires_tableau.pdf", mime="application/pdf")
         except Exception as e:
-             st.error(f"Une erreur est survenue lors de la construction du PDF. Détails: {e}")
+             st.error(f"Une erreur est survenue lors de la construction du PDF : {e}")
     else:
          st.warning("Aucune donnée n'a été trouvée pour générer les fiches.")
