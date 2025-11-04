@@ -231,7 +231,7 @@ for stagiaire, data_stagiaire in groupes_stagiaires:
 doc.build(elements)
 buffer.seek(0)
 
-    st.download_button(
+st.download_button(
         label="⬇️ Télécharger les fiches PDF",
         data=buffer,
         file_name="fiches_evaluations.pdf",
