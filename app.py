@@ -39,26 +39,27 @@ def nettoyer_intitule(texte):
     return t.capitalize()
 
 def coloriser_valeur(val):
-    """Retourne HTML <font> coloré selon valeur (ReportLab Paragraph interprète HTML)."""
+    """Retourne du HTML coloré selon la valeur, avec ordre de priorité correct."""
     if pd.isna(val):
         return ""
-    s = str(val).strip()
-    s_up = s.upper()
-    mapping = {
-        "FAIT": "#007A33",
-        "A": "#00B050",
-        "EN COURS": "#FFD700",
-        "ECA": "#ED7D31",
-        "NE": "#808080",
-        "NA": "#C00000",
-    }
-    # si valeur contient un des clés (ex. "Fait", "E.C.A." ou " ECA ")
-    for key, color in mapping.items():
-        if key in s_up.replace(".", "").replace(" ", "") or key in s_up:
-            # affiche l'original (préserve casse) mais colore
-            return f"<font color='{color}'><b>{s}</b></font>"
-    # fallback : retourner texte brut (non coloré)
-    return s
+    s = str(val).strip().upper().replace(".", "").replace(" ", "")
+
+    # ordre important : ECA avant A, sinon "A" match aussi dans "ECA"
+    mapping = [
+        ("FAIT", "#00B050"),   # vert
+        ("ENCOURS", "#FFD700"),# jaune
+        ("NE", "#808080"),     # gris
+        ("NA", "#C00000"),     # rouge
+        ("ECA", "#ED7D31"),    # orange
+        ("A", "#00B050"),      # vert
+    ]
+
+    for key, color in mapping:
+        if s == key:
+            return f"<font color='{color}'><b>{key.title()}</b></font>"
+
+    # fallback si la valeur n’est pas pile correspondante
+    return f"<b>{val}</b>"
 
 # ---------- traitement principal ----------
 if uploaded_file:
