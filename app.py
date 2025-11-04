@@ -80,7 +80,6 @@ if uploaded_file:
         return str(val)
 
     val = val.strip().upper()
-
     if val == "FAIT":
         return f"<font color='#007A33'><b>{val}</b></font>"  # vert foncé
     elif val == "A":
