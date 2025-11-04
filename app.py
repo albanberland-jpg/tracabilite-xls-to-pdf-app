@@ -19,9 +19,35 @@ if uploaded_file:
     st.success("✅ Fichier importé avec succès !")
     st.dataframe(df.head())
 
-    # --- Normalisation des colonnes ---
-    df.columns = [c.strip().lower().replace("é", "e").replace("è", "e").replace("ê", "e") for c in df.columns]
+   # --- Normalisation propre des colonnes ---
+    def nettoyer_colonne(c):
+        import unicodedata
+        # Supprimer les accents et espaces parasites
+        c = ''.join(
+            ch for ch in unicodedata.normalize('NFKD', c)
+            if not unicodedata.combining(ch)
+        )
+        return c.strip().lower().replace(" ", "_")
 
+    df.columns = [nettoyer_colonne(c) for c in df.columns]
+
+    st.write("🔍 Colonnes importées :", df.columns.tolist())
+
+    # --- Recherche intelligente des colonnes ---
+    prenom_col = next((c for c in df.columns if "prenom" in c and "stagiaire" not in c), None)
+    nom_col = next((c for c in df.columns if "nom" in c and "stagiaire" not in c), None)
+    stagiaire_col = next((c for c in df.columns if any(x in c for x in ["stagiaire", "participant", "eleve"])), None)
+    date_col = next((c for c in df.columns if "date" in c), None)
+
+    st.write(f"🧾 Colonnes détectées → prenom: {prenom_col}, nom: {nom_col}, stagiaire: {stagiaire_col}, date: {date_col}")
+
+    # --- Création du champ formateur ---
+    if prenom_col and nom_col:
+        df["formateur"] = df[prenom_col].astype(str).str.strip() + " " + df[nom_col].astype(str).str.strip()
+    else:
+        st.warning("⚠️ Colonnes 'prenom' et/ou 'nom' introuvables — le champ 'formateur' sera laissé vide.")
+        df["formateur"] = ""
+        
     # --- Colonnes à masquer ---
     colonnes_a_masquer = [
         "email", "organisation", "departement", "jcmsplugin",
