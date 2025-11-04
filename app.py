@@ -2,16 +2,25 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
 import re
 
-st.title("📘 Générateur de fiches d'évaluation")
+st.title("📘 Générateur de fiches d’évaluation stagiaires")
 
-uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xlsx"])
+uploaded_file = st.file_uploader("Choisissez le fichier Excel", type=["xlsx"])
 
-# --- Fonction de coloration conditionnelle ---
+# --- Fonction utilitaire pour nettoyer les intitulés ---
+def nettoyer_texte(txt):
+    if not isinstance(txt, str):
+        return ""
+    txt = re.sub(r"[^A-Za-zÀ-ÿ0-9'’() .:/-]", " ", txt)
+    txt = re.sub(r"_+", " ", txt)
+    txt = re.sub(r"\s+", " ", txt)
+    return txt.strip().capitalize()
+
+# --- Fonction pour coloriser les résultats d’évaluation ---
 def coloriser_valeur(val):
     if not isinstance(val, str):
         return str(val)
@@ -22,93 +31,120 @@ def coloriser_valeur(val):
         "EN COURS": "#FFD700",   # jaune
         "ECA": "#ED7D31",        # orange
         "NE": "#808080",         # gris
-        "NA": "#C00000",         # rouge
+        "NA": "#C00000"          # rouge
     }
-    for mot, couleur in couleurs.items():
-        if mot in val:
-            return f"<font color='{couleur}'><b>{val}</b></font>"
-    return val
+    couleur = couleurs.get(val, "#000000")
+    return f"<font color='{couleur}'><b>{val}</b></font>"
 
-# --- Fonction de nettoyage du texte ---
-def nettoyer_texte(texte):
-    if not isinstance(texte, str):
-        return ""
-    texte = re.sub(r"[■•_🚤🌊⛱🐟🔵\-]+", " ", texte)
-    return texte.strip().capitalize()
-
-if uploaded_file:
+if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
+    colonnes = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df.columns = colonnes
 
-    st.write("🔍 Colonnes importées :", list(df.columns))
+    st.write("🔍 Colonnes importées :", colonnes)
 
-    # Identifier les colonnes principales (en ignorant les majuscules/minuscules)
-    def trouver_colonne(nom_recherche):
-        for c in df.columns:
-            if nom_recherche.lower() in c.lower():
-                return c
-        return None
+    # --- Identifier les colonnes importantes ---
+    prenom_col = next((c for c in df.columns if "prenom" in c), None)
+    nom_col = next((c for c in df.columns if "nom" in c and "prenom" not in c), None)
+    stagiaire_col = next((c for c in df.columns if "stagiaire" in c), None)
+    date_col = next((c for c in df.columns if "date" in c), None)
 
-    prenom_col = trouver_colonne("prenom")
-    nom_col = trouver_colonne("nom")
-    stagiaire_col = trouver_colonne("stagiaire_evalue")
-    date_col = trouver_colonne("date")
-
-    if prenom_col and nom_col:
-        df["formateur"] = df[prenom_col].astype(str) + " " + df[nom_col].astype(str)
+    if not stagiaire_col:
+        st.error("Colonne du stagiaire introuvable.")
     else:
-        st.warning("⚠️ Colonnes 'prenom' et/ou 'nom' introuvables — le champ 'formateur' sera laissé vide.")
-        df["formateur"] = ""
+        # Ajout d'une colonne "formateur"
+        if prenom_col and nom_col:
+            df["formateur"] = df[prenom_col].astype(str) + " " + df[nom_col].astype(str)
+        else:
+            df["formateur"] = ""
 
-    groupes_stagiaires = df.groupby(stagiaire_col)
+        # --- Définir les groupes de colonnes ---
+        app_non_eval_cols = [c for c in df.columns if c.startswith("app_non_soumis_a_evaluation")]
+        app_eval_cols = [c for c in df.columns if c.startswith("app_evalues")]
+        progression_col = next((c for c in df.columns if "axes_de_progression" in c), None)
+        ancrage_col = next((c for c in df.columns if "ancrage" in c), None)
+        app_propose_col = next((c for c in df.columns if "app_qui_pourrait" in c), None)
 
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=40, bottomMargin=40)
+        # --- Préparer le PDF ---
+        buffer = BytesIO()
+        pdf = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        titre_style = ParagraphStyle(
+            name="Titre",
+            parent=styles["Heading1"],
+            alignment=TA_CENTER,
+            spaceAfter=10,
+            textColor="#007A33"
+        )
+        section_style = ParagraphStyle(
+            name="Section",
+            parent=styles["Heading2"],
+            textColor="#004C99",
+            spaceBefore=8,
+            spaceAfter=6
+        )
+        contenu_style = styles["Normal"]
 
-    styles = getSampleStyleSheet()
-    titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], textColor=colors.HexColor("#003366"), spaceAfter=10)
-    sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor=colors.HexColor("#003366"), spaceAfter=8)
-    texte_style = ParagraphStyle("Texte", parent=styles["Normal"], fontSize=11, leading=14, spaceAfter=6)
+        elements = []
 
-    elements = []
-    elements.append(Paragraph("Test <font color='#FF0000'><b>rouge</b></font>", texte_style))
-    elements.append(Spacer(1, 12))
+        groupes = df.groupby(stagiaire_col)
 
-    for stagiaire, data_stagiaire in groupes_stagiaires:
-        elements.append(Paragraph("■ Fiche d’évaluation", titre_style))
-        elements.append(Spacer(1, 10))
-        elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", texte_style))
-        if date_col in data_stagiaire:
-            elements.append(Paragraph(f"<b>Évaluation du :</b> {data_stagiaire[date_col].iloc[0]}", texte_style))
-        elements.append(Paragraph(f"<b>Formateur :</b> {data_stagiaire['formateur'].iloc[0]}", texte_style))
-        elements.append(Spacer(1, 10))
+        for stagiaire, data_stagiaire in groupes:
+            ligne = data_stagiaire.iloc[0]
 
-        # --- Sections principales ---
-        sections = {
-            "APP non soumis à évaluation": "app_non_soumis_a_evaluation",
-            "APP évalués": "app_evalues",
-            "Axes de progression": "axes_de_progression",
-            "Points d'ancrage": "point_d",
-            "APP qui pourraient être proposés": "app_qui_pourrait",
-        }
-
-        for titre, mot_clef in sections.items():
-            cols = [c for c in df.columns if mot_clef in c.lower()]
-            if not cols:
-                continue
-
-            elements.append(Paragraph(f"■ {titre}", sous_titre_style))
-            for col in cols:
-                valeur = str(data_stagiaire[col].iloc[0]).strip()
-                if valeur and valeur not in ["nan", ""]:
-                    # Nettoyer l’intitulé
-                    nom_app = nettoyer_texte(col.split("/")[-1])
-                    # Coloriser la valeur
-                    valeur_coloree = coloriser_valeur(valeur)
-                    elements.append(Paragraph(f"• {nom_app} : {valeur_coloree}", texte_style))
+            elements.append(Paragraph(f"Fiche d’évaluation", titre_style))
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte(stagiaire)}", contenu_style))
+            elements.append(Paragraph(f"<b>Date :</b> {ligne.get(date_col, '')}", contenu_style))
+            elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte(ligne.get('formateur', ''))}", contenu_style))
             elements.append(Spacer(1, 10))
 
-        elements.append(Spacer(1, 20))
+            # Section : APP non soumis à évaluation
+            if app_non_eval_cols:
+                elements.append(Paragraph("🟦 APP non soumis à évaluation", section_style))
+                for c in app_non_eval_cols:
+                    nom_app = nettoyer_texte(c.split("/", 1)[-1])
+                    val = coloriser_valeur(ligne[c])
+                    elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
+                elements.append(Spacer(1, 10))
 
-    doc.build(elements)
-    st.success("✅ PDF généré avec succès !")
-    st.download_button("📄 Télécharger le PDF", data=buffer.getvalue(), file_name="fiches_evaluations.pdf")
+            # Section : APP évalués
+            if app_eval_cols:
+                elements.append(Paragraph("🟩 APP évalués", section_style))
+                for c in app_eval_cols:
+                    nom_app = nettoyer_texte(c.split("/", 1)[-1])
+                    val = coloriser_valeur(ligne[c])
+                    elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
+                elements.append(Spacer(1, 10))
+
+            # Axes de progression
+            if progression_col:
+                val = nettoyer_texte(ligne.get(progression_col, ""))
+                elements.append(Paragraph("📈 Axes de progression", section_style))
+                elements.append(Paragraph(val, contenu_style))
+                elements.append(Spacer(1, 10))
+
+            # Points d’ancrage
+            if ancrage_col:
+                val = nettoyer_texte(ligne.get(ancrage_col, ""))
+                elements.append(Paragraph("📌 Points d’ancrage", section_style))
+                elements.append(Paragraph(val, contenu_style))
+                elements.append(Spacer(1, 10))
+
+            # APP proposés
+            if app_propose_col:
+                val = nettoyer_texte(ligne.get(app_propose_col, ""))
+                elements.append(Paragraph("💡 APP qui pourraient être proposés", section_style))
+                elements.append(Paragraph(val, contenu_style))
+
+            elements.append(PageBreak())
+
+        pdf.build(elements)
+        buffer.seek(0)
+
+        st.download_button(
+            label="📄 Télécharger le PDF consolidé",
+            data=buffer,
+            file_name="fiches_stagiaires.pdf",
+            mime="application/pdf"
+        )
