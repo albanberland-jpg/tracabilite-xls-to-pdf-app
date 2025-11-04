@@ -33,14 +33,35 @@ if uploaded_file:
 
     st.write("🔍 Colonnes importées :", df.columns.tolist())
 
-    # --- Recherche intelligente des colonnes ---
-    prenom_col = next((c for c in df.columns if "prenom" in c and "stagiaire" not in c), None)
-    nom_col = next((c for c in df.columns if "nom" in c and "stagiaire" not in c and "prenom" not in c), None)
-    stagiaire_col = next((c for c in df.columns if any(x in c for x in ["stagiaire", "participant", "eleve"])), None)
-    date_col = next((c for c in df.columns if "date" in c), None)
+     # --- Recherche intelligente des colonnes ---
+    def find_column(keyword, exclude=None):
+        """Retourne le premier nom de colonne contenant le mot-clé donné, sans confusion."""
+        keyword = keyword.lower()
+        exclude = exclude or []
+        for c in df.columns:
+            cname = str(c).lower().strip()
+            if keyword in cname and not any(ex in cname for ex in exclude):
+                return c
+        return None
+
+    prenom_col = find_column("prenom", ["stagiaire"])
+    nom_col = find_column("nom", ["stagiaire", "prenom"])
+    stagiaire_col = find_column("stagiaire")
+    date_col = find_column("date")
 
     st.write(f"🧾 Colonnes détectées → prenom: {prenom_col}, nom: {nom_col}, stagiaire: {stagiaire_col}, date: {date_col}")
 
+    # --- Création du champ formateur ---
+    if prenom_col is not None and nom_col is not None:
+        try:
+            df["formateur"] = df[prenom_col].astype(str).str.strip() + " " + df[nom_col].astype(str).str.strip()
+            st.success("✅ Champ 'formateur' créé avec succès.")
+        except Exception as e:
+            st.error(f"❌ Erreur lors de la création du champ formateur : {e}")
+            df["formateur"] = ""
+    else:
+        st.warning("⚠️ Colonnes 'prenom' et/ou 'nom' introuvables — le champ 'formateur' sera laissé vide.")
+        df["formateur"] = ""
     # --- Création du champ formateur ---
     if prenom_col and nom_col:
         df["formateur"] = df[prenom_col].astype(str).str.strip() + " " + df[nom_col].astype(str).str.strip()
