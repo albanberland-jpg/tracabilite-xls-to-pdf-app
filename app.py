@@ -51,12 +51,12 @@ def coloriser_valeur_html(val):
     key = valeur_cle(val)
     # Utilisation d'objets colors.HexColor est plus sûr pour ReportLab
     mapping = {
-        "FAIT": colors.HexColor("#00B050"),    # vert clair
-        "A": colors.HexColor("#007A33"),       # vert foncé
-        "ENCOURS": colors.HexColor("#FFD700"),  # jaune
-        "ECA": colors.HexColor("#ED7D31"),     # orange
-        "NE": colors.HexColor("#808080"),      # gris
-        "NA": colors.HexColor("#C00000")       # rouge
+        "fait": colors.HexColor("#00B050"),    # vert clair
+        "a": colors.HexColor("#007A33"),       # vert foncé
+        "en cours": colors.HexColor("#FFD700"),  # jaune
+        "eca": colors.HexColor("#ED7D31"),     # orange
+        "ne": colors.HexColor("#808080"),      # gris
+        "na": colors.HexColor("#C00000")       # rouge
     }
     # Fallback noir si non trouvé
     color = mapping.get(key, colors.HexColor("#000000")) 
