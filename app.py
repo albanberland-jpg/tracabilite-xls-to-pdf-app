@@ -14,7 +14,8 @@ st.write("Ce script génère un PDF récapitulatif avec des tableaux colorés (c
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel (.xlsx)", type=["xlsx"])
 
-# --- COULEURS DE FOND DE CELLULE (ReportLab) ---
+# --- COULEURS ET UTILS (EN DEHORS DE LA CONDITION) ---
+
 COULEURS_FOND = {
     "FAIT": colors.HexColor("#A9D18E"),    
     "A": colors.HexColor("#70AD47"),       
@@ -24,11 +25,6 @@ COULEURS_FOND = {
     "NA": colors.HexColor("#F8CBAD"),      
 }
 
-# COULEURS DE POLICE (ReportLab)
-POLICE_BLANC = colors.white
-POLICE_NOIR = colors.black
-
-# --- Utilities ---
 def normaliser_colname(name):
     s = str(name)
     s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
@@ -54,14 +50,24 @@ def valeur_cle(val):
     s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
     return s
 
-# --- STYLES DE PARAGRAPHE PRÉ-COLORÉS (NOUVEAU) ---
+# --- DÉFINITION GLOBALE DES STYLES PDF (CORRECTION DE L'ERREUR) ---
 styles = getSampleStyleSheet()
-base_style = ParagraphStyle("BaseItem", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, alignment=1)
 
-# Création des styles de police pour la colonne des notes
+# Styles généraux
+titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1, fontSize=18, textColor=colors.HexColor("#007A33"), spaceAfter=12)
+section_style = ParagraphStyle("Section", parent=styles["Heading3"], fontSize=12, textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
+
+# Styles de base pour les éléments de fiche (non tableau)
+item_style_normal = ParagraphStyle("ItemNormal", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0)
+item_style_bold = ParagraphStyle("ItemBold", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, fontName='Helvetica-Bold')
+
+# Styles de paragraphe pour la colonne des notes (gestion de la couleur de police)
+base_style = ParagraphStyle("BaseItem", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, alignment=1)
+POLICE_BLANC = colors.white
+POLICE_NOIR = colors.black
 NOTE_STYLES = {
     "FAIT": ParagraphStyle("NoteFAIT", parent=base_style, textColor=POLICE_NOIR),
-    "A": ParagraphStyle("NoteA", parent=base_style, textColor=POLICE_BLANC), # Blanc sur fond vert foncé
+    "A": ParagraphStyle("NoteA", parent=base_style, textColor=POLICE_BLANC),
     "ENCOURS": ParagraphStyle("NoteEC", parent=base_style, textColor=POLICE_NOIR),
     "ECA": ParagraphStyle("NoteECA", parent=base_style, textColor=POLICE_NOIR),
     "NE": ParagraphStyle("NoteNE", parent=base_style, textColor=POLICE_NOIR),
@@ -69,13 +75,11 @@ NOTE_STYLES = {
     "DEFAULT": ParagraphStyle("NoteDEF", parent=base_style, textColor=POLICE_NOIR),
 }
 
-# --- Fonction de génération de tableau (Utilise les styles de note) ---
+# --- Fonction de génération de tableau ---
 def generate_app_table(title, cols, row, item_style):
     data = []
-    styles_table = [] # Renommé pour éviter la confusion avec styles=getSampleStyleSheet()
+    styles_table = []
     
-    # 1. En-tête du tableau
-    # Style de l'en-tête (gras + centré)
     header_style = ParagraphStyle("Header", parent=item_style, fontName='Helvetica-Bold', alignment=1)
     header = [
         Paragraph("Séquence", header_style),
@@ -83,7 +87,6 @@ def generate_app_table(title, cols, row, item_style):
     ]
     data.append(header)
     
-    # 2. Remplissage des lignes et application des styles
     row_idx = 1
     
     for c in cols:
@@ -91,13 +94,10 @@ def generate_app_table(title, cols, row, item_style):
         if pd.notna(v) and str(v).strip():
             note_cle = valeur_cle(v)
             
-            # Définition des éléments de la ligne
             nom_app_clean = c.split("/")[-1].replace("_", " ").strip().title()
             
-            # --- PARAGRAPHES ---
-            cell_nom = Paragraph(nettoyer_texte_visible(nom_app_clean), item_style)
+            cell_nom = Paragraph(nettoyer_texte_visible(nom_app_clean), item_style_normal)
             
-            # CLÉ DE LA CORRECTION : Utiliser le style de paragraphe prédéfini (Note_STYLES)
             note_paragraph_style = NOTE_STYLES.get(note_cle, NOTE_STYLES["DEFAULT"])
             cell_valeur = Paragraph(nettoyer_texte_visible(v), note_paragraph_style)
             
@@ -109,23 +109,19 @@ def generate_app_table(title, cols, row, item_style):
                     ('BACKGROUND', (1, row_idx), (1, row_idx), COULEURS_FOND[note_cle])
                 )
             
-            # Pas besoin de la commande 'TEXTCOLOR' dans TableStyle, car le ParagraphStyle le gère.
-            
             row_idx += 1
 
-    if len(data) == 1: # Seulement l'en-tête
+    if len(data) == 1: 
         return None
         
-    # 3. Création du tableau et du style général
     table = Table(data, colWidths=[3.5 * inch, 1.5 * inch])
     
     general_style = [
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        # Style pour l'en-tête
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#D9E1F2")),
-        ('ALIGN', (1, 0), (1, -1), 'CENTER'), # Aligne la colonne des notes au centre
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
     ]
     
     table.setStyle(TableStyle(general_style + styles_table))
@@ -165,10 +161,8 @@ if uploaded_file:
     ancrage_cols = [c for c in df.columns if "ancrage" in c or "ancr" in c]
     app_prop_cols = [c for c in df.columns if "app_qui" in c or "propose" in c]
 
-    # Styles PDF de texte
-    item_style_normal = ParagraphStyle("ItemNormal", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0)
-    item_style_bold = ParagraphStyle("ItemBold", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, fontName='Helvetica-Bold')
-
+    
+    # Configuration du document PDF
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50)
     elements = []
@@ -181,7 +175,7 @@ if uploaded_file:
             elements.append(PageBreak())
 
         # En-tête de fiche
-        elements.append(Paragraph("Fiche d’évaluation", titre_style))
+        elements.append(Paragraph("Fiche d’évaluation", titre_style)) # Ici, titre_style est maintenant défini!
         elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_style_bold))
         if date_col:
             elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(first_row.get(date_col, ''))}", item_style_bold))
@@ -190,7 +184,6 @@ if uploaded_file:
 
         # --- GESTION DES SECTIONS APP EN TABLEAUX ---
         
-        # 1. APP non soumis à évaluation
         elements.append(Paragraph(f"<b>APP non soumis à évaluation</b>", section_style))
         table_non_eval = generate_app_table("APP non soumis à évaluation", app_non_eval_cols, first_row, item_style_normal)
         if table_non_eval:
@@ -199,7 +192,6 @@ if uploaded_file:
             elements.append(Paragraph("Aucun item", item_style_normal))
         elements.append(Spacer(1, 6))
 
-        # 2. APP évalués
         elements.append(Paragraph(f"<b>APP évalués</b>", section_style))
         table_eval = generate_app_table("APP évalués", app_eval_cols, first_row, item_style_normal)
         if table_eval:
@@ -210,7 +202,6 @@ if uploaded_file:
 
         # --- GESTION DES SECTIONS TEXTE LIBRE ---
         
-        # Fonction d'ajout de section (utilisée uniquement pour les blocs texte)
         def add_text_section(title, cols):
             elements.append(Paragraph(f"<b>{title}</b>", section_style))
             added = False
@@ -224,7 +215,6 @@ if uploaded_file:
                 elements.append(Paragraph("Aucun item", item_style_normal))
             elements.append(Spacer(1, 6))
 
-        # Ajout des sections de texte
         add_text_section("Axes de progression", axes_cols)
         add_text_section("Points d’ancrage", ancrage_cols)
         add_text_section("APP qui pourraient être proposés", app_prop_cols)
