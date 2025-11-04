@@ -223,5 +223,5 @@ couleurs = {
         "ECA": colors.HexColor("#FF8C00"), 
     }
 
-        c = couleurs.get(val_normalisee)
+c = couleurs.get(val_normalisee)
         # ... (fin de la fonction coloriser)
