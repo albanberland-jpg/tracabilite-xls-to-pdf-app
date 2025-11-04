@@ -42,9 +42,13 @@ if uploaded_file:
     df = df[colonnes_utiles]
 
     # --- Création colonne 'formateur' ---
-    if prenom_col and nom_col:
+    if prenom_col and nom_col and prenom_col in df.columns and nom_col in df.columns:
         df["formateur"] = df[prenom_col].astype(str) + " " + df[nom_col].astype(str)
-
+    else:
+        # Si on ne trouve pas les colonnes, on crée une colonne vide
+        st.warning("⚠️ Colonnes 'prenom' et/ou 'nom' introuvables — le champ 'formateur' sera laissé vide.")
+        df["formateur"] = ""
+        
     # --- Tri des données ---
     if date_col:
         df = df.sort_values(by=[stagiaire_col, date_col])
