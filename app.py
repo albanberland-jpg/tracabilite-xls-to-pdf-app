@@ -16,17 +16,17 @@ if uploaded_file:
     st.success("✅ Fichier importé avec succès !")
     st.dataframe(df.head())
 
-    # Normalisation des colonnes
+    # Normalisation des noms de colonnes
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Colonnes inutiles à masquer
+    # Colonnes à masquer automatiquement
     colonnes_a_masquer = [
-        "email", "e-mail", "organisation", "département",
-        "jcmsplugin", "temps écoulé", "taux de réussite", "score",
-        "tentative", "réussite", "nombre de questions"
+        "email", "e-mail", "organisation", "département", "jcmsplugin",
+        "temps écoulé", "taux de réussite", "score", "tentative",
+        "réussite", "nombre de questions", "nom"  # "nom" supprimé (mais utilisé pour formateur)
     ]
 
-    # Détection automatique des noms utiles
+    # Recherche automatique des colonnes clés
     nom_cols = [c for c in df.columns if "nom" in c]
     prenom_cols = [c for c in df.columns if "prenom" in c or "prénom" in c]
     stagiaire_cols = [c for c in df.columns if "stagiaire" in c or "élève" in c or "participant" in c]
@@ -38,22 +38,19 @@ if uploaded_file:
     date_col = date_cols[0] if date_cols else None
 
     if not stagiaire_col:
-        st.error("❌ Impossible de trouver une colonne correspondant au stagiaire évalué.")
+        st.error("❌ Impossible de trouver la colonne correspondant au stagiaire évalué.")
         st.stop()
 
-    # Nettoyage des colonnes à masquer
-    colonnes_utiles = [
-        c for c in df.columns
-        if all(x not in c for x in colonnes_a_masquer)
-    ]
+    # Retirer les colonnes inutiles du DataFrame
+    colonnes_utiles = [c for c in df.columns if all(x not in c for x in colonnes_a_masquer)]
     df = df[colonnes_utiles]
 
-    # Suppression des lignes sans évaluation
+    # Supprimer les lignes sans évaluation
     colonnes_eval = [c for c in df.columns if "eval" in c or "commentaire" in c or "observation" in c]
     if colonnes_eval:
         df = df.dropna(how="all", subset=colonnes_eval)
 
-    # Tri du tableau
+    # Trier les données
     if date_col:
         df = df.sort_values(by=[stagiaire_col, date_col])
 
@@ -86,27 +83,29 @@ if uploaded_file:
         elements = []
 
         for stagiaire, data_stagiaire in groupes_stagiaires:
+            # --- Titre principal ---
             elements.append(Paragraph("📘 Fiche d’évaluation", titre_style))
             elements.append(Spacer(1, 12))
 
-            # Nom du stagiaire évalué
+            # Stagiaire évalué
             elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", sous_titre_style))
             elements.append(Spacer(1, 8))
 
             for _, ligne in data_stagiaire.iterrows():
+                # Date
                 if date_col and pd.notna(ligne[date_col]):
                     elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
 
-                # Formateur
+                # Formateur (composé de prénom + nom)
                 if nom_col and prenom_col:
                     formateur = f"{ligne[prenom_col]} {ligne[nom_col]}"
                     elements.append(Paragraph(f"<b>Formateur :</b> {formateur}", champ_style))
-                elif nom_col:
-                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne[nom_col]}", champ_style))
+                elif prenom_col:
+                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne[prenom_col]}", champ_style))
 
-                elements.append(Spacer(1, 6))
+                elements.append(Spacer(1, 8))
 
-                # Contenu de l’évaluation
+                # Autres informations d'évaluation
                 for col, val in ligne.items():
                     if pd.notna(val) and col not in [stagiaire_col, nom_col, prenom_col, date_col]:
                         col_affiche = col.capitalize().replace("_", " ")
