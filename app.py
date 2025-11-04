@@ -74,6 +74,28 @@ if uploaded_file:
 
     groupes_stagiaires = df.groupby(stagiaire_col)
 
+    def coloriser_valeur(val):
+    """Retourne le texte coloré selon la valeur d'évaluation."""
+    if not isinstance(val, str):
+        return str(val)
+
+    val = val.strip().upper()
+
+    if val == "FAIT":
+        return f"<font color='#007A33'><b>{val}</b></font>"  # vert foncé
+    elif val == "A":
+        return f"<font color='#00B050'><b>{val}</b></font>"  # vert clair
+    elif val == "EN COURS":
+        return f"<font color='#FFD700'><b>{val}</b></font>"  # jaune
+    elif val == "ECA":
+        return f"<font color='#ED7D31'><b>{val}</b></font>"  # orange
+    elif val == "NE":
+        return f"<font color='#808080'><b>{val}</b></font>"  # gris
+    elif val == "NA":
+        return f"<font color='#C00000'><b>{val}</b></font>"  # rouge
+    else:
+        return val
+        
     # --- Génération du PDF ---
     if st.button("📄 Générer les fiches PDF"):
         buffer = BytesIO()
