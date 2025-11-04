@@ -94,103 +94,145 @@ def coloriser_valeur(val):
     else:
         return val   
         
-    # --- Génération du PDF ---
+   # --- Génération du PDF ---
 if st.button("📄 Générer les fiches PDF"):
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4,
-                                leftMargin=40, rightMargin=40,
-                                topMargin=40, bottomMargin=40)
-        styles = getSampleStyleSheet()
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.colors import HexColor
 
-        # --- Styles ---
-        titre_style = ParagraphStyle("Titre", parent=styles["Title"], alignment=TA_CENTER, textColor=HexColor("#003366"))
-        sous_titre_style = ParagraphStyle("SousTitre", parent=styles["Heading2"], textColor=HexColor("#004C99"))
-        champ_style = ParagraphStyle("Champ", parent=styles["Normal"], spaceAfter=6, fontName="Helvetica")
-        section_style = ParagraphStyle("Section", parent=styles["Heading3"], textColor=HexColor("#FFFFFF"),
-                                       backColor=HexColor("#003366"), alignment=TA_LEFT,
-                                       leftIndent=4, rightIndent=4, spaceBefore=10, spaceAfter=6)
-        contenu_style = ParagraphStyle("Contenu", parent=styles["Normal"], leftIndent=12, spaceAfter=4, fontName="Helvetica")
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
 
-        elements = []
+    # --- Styles personnalisés ---
+    titre_style = ParagraphStyle(
+        "TitrePrincipal",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        textColor=HexColor("#003366"),
+    )
+    sous_titre_style = ParagraphStyle(
+        "SousTitre",
+        parent=styles["Heading2"],
+        textColor=HexColor("#006699"),
+    )
+    champ_style = ParagraphStyle("Champ", parent=styles["Normal"], spaceAfter=6)
+    section_style = ParagraphStyle(
+        "Section",
+        parent=styles["Heading3"],
+        textColor=HexColor("#004C99"),
+        spaceBefore=12,
+        spaceAfter=6,
+        underlineWidth=0.5,
+    )
+    contenu_style = ParagraphStyle(
+        "Contenu",
+        parent=styles["Normal"],
+        leftIndent=12,
+        spaceAfter=4,
+        allowOrphans=0,
+        allowWidows=0,
+        fontName="Helvetica",
+        fontSize=10,
+    )
 
-        for stagiaire, data_stagiaire in groupes_stagiaires:
-            # --- En-tête fiche ---
-            header_table = Table(
-                [[Paragraph(f"<b>FICHE D’ÉVALUATION</b>", titre_style),
-                  Paragraph(f"<b>Stagiaire :</b> {stagiaire}", champ_style)]],
-                colWidths=[250, 250]
-            )
-            header_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), HexColor("#DCE6F1")),
-                ("BOX", (0, 0), (-1, -1), 1, HexColor("#003366")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE")
-            ]))
-            elements.append(header_table)
+    # --- Fonction de coloration des valeurs ---
+    def coloriser_valeur(val):
+        """Retourne le texte coloré selon la valeur d'évaluation."""
+        if not isinstance(val, str):
+            return str(val)
+
+        val = val.strip().upper()
+        couleurs = {
+            "FAIT": "#007A33",     # vert foncé
+            "A": "#00B050",        # vert clair
+            "EN COURS": "#FFD700", # jaune
+            "ECA": "#ED7D31",      # orange
+            "NE": "#808080",       # gris
+            "NA": "#C00000",       # rouge
+        }
+        couleur = couleurs.get(val)
+        if couleur:
+            return f'<font color="{couleur}"><b>{val}</b></font>'
+        return val
+
+    elements = []
+
+    for stagiaire, data_stagiaire in groupes_stagiaires:
+        elements.append(Paragraph("📘 Fiche d’évaluation", titre_style))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(f"<b>Stagiaire évalué :</b> {stagiaire}", sous_titre_style))
+        elements.append(Spacer(1, 8))
+
+        for _, ligne in data_stagiaire.iterrows():
+            # --- Informations générales ---
+            if date_col and pd.notna(ligne.get(date_col)):
+                elements.append(Paragraph(f"<b>Évaluation du :</b> {ligne[date_col]}", champ_style))
+            if ligne.get("formateur"):
+                elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
             elements.append(Spacer(1, 10))
 
-            for _, ligne in data_stagiaire.iterrows():
-                # --- Info générale ---
-                if date_col and pd.notna(ligne.get(date_col)):
-                    elements.append(Paragraph(f"<b>Date d’évaluation :</b> {ligne[date_col]}", champ_style))
-                if ligne.get("formateur"):
-                    elements.append(Paragraph(f"<b>Formateur :</b> {ligne['formateur']}", champ_style))
+            # --- Section : APP non soumis à évaluation ---
+            if app_non_evalues_cols:
+                elements.append(Paragraph("🟡 APP non soumis à évaluation", section_style))
+                for c in app_non_evalues_cols:
+                    val = ligne.get(c)
+                    if pd.notna(val):
+                        texte_val = coloriser_valeur(str(val))
+                        nom_app = c.split("/")[-1].strip().capitalize()
+                        texte = f"• {nom_app} : {texte_val}"
+                        elements.append(Paragraph(texte, contenu_style))
                 elements.append(Spacer(1, 8))
 
-                # --- Helper pour extraire nom après "/" ---
-                def nom_app(col):
-                    return col.split("/")[-1].strip().capitalize() if "/" in col else col.capitalize()
-
-                # --- Section : APP non soumis à évaluation ---
-                if app_non_evalues_cols:
-                    elements.append(Paragraph("APP non soumis à évaluation", section_style))
-                    for c in app_non_evalues_cols:
-                         val = ligne.get(c)
+            # --- Section : APP évalués ---
+            if app_evalues_cols:
+                elements.append(Paragraph("🟢 APP évalués", section_style))
+                for c in app_evalues_cols:
+                    val = ligne.get(c)
                     if pd.notna(val):
-                            texte_colore = coloriser_valeur(str(val))
-                    elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
+                        texte_val = coloriser_valeur(str(val))
+                        nom_app = c.split("/")[-1].strip().capitalize()
+                        texte = f"• {nom_app} : {texte_val}"
+                        elements.append(Paragraph(texte, contenu_style))
+                elements.append(Spacer(1, 8))
 
-                # --- Section : APP évalués ---
-                if app_evalues_cols:
-                    elements.append(Paragraph("APP évalués", section_style))
-                    for c in app_evalues_cols:
-                        val = ligne.get(c)
+            # --- Section : Axes de progression ---
+            if axe_prog_cols:
+                elements.append(Paragraph("🔵 Axes de progression", section_style))
+                for c in axe_prog_cols:
+                    val = ligne.get(c)
                     if pd.notna(val):
-                            texte_colore = coloriser_valeur(str(val))
-                    elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
+                        elements.append(Paragraph(f"• {val}", contenu_style))
+                elements.append(Spacer(1, 8))
 
-                # --- Section : Axes de progression ---
-                if axe_prog_cols:
-                    elements.append(Paragraph("Axes de progression", section_style))
-                    for c in axe_prog_cols:
-                        val = nettoyer_texte(ligne.get(c))
-                        if pd.notna(val):
-                            elements.append(Paragraph(f"• {val}", contenu_style))
-                    elements.append(Spacer(1, 6))
+            # --- Section : Points d’ancrage ---
+            if points_ancrage_cols:
+                elements.append(Paragraph("🟠 Points d’ancrage", section_style))
+                for c in points_ancrage_cols:
+                    val = ligne.get(c)
+                    if pd.notna(val):
+                        elements.append(Paragraph(f"• {val}", contenu_style))
+                elements.append(Spacer(1, 8))
 
-                # --- Section : Points d’ancrage ---
-                if points_ancrage_cols:
-                    elements.append(Paragraph("Points d’ancrage", section_style))
-                    for c in points_ancrage_cols:
-                        val = nettoyer_texte(ligne.get(c))
-                        if pd.notna(val):
-                            elements.append(Paragraph(f"• {val}", contenu_style))
-                    elements.append(Spacer(1, 6))
+            # --- Section : APP qui pourraient être proposés ---
+            if app_proposes_cols:
+                elements.append(Paragraph("🟣 APP qui pourraient être proposés", section_style))
+                for c in app_proposes_cols:
+                    val = ligne.get(c)
+                    if pd.notna(val):
+                        elements.append(Paragraph(f"• {val}", contenu_style))
+                elements.append(Spacer(1, 8))
 
-                # --- Section : APP proposés ---
-                if app_proposes_cols:
-                    elements.append(Paragraph("APP qui pourraient être proposés", section_style))
-                    for c in app_proposes_cols:
-                        val = nettoyer_texte(ligne.get(c))
-                        if pd.notna(val):
-                            elements.append(Paragraph(f"• {nom_app(c)} : {val}", contenu_style))
-                    elements.append(Spacer(1, 6))
+            # --- Séparation entre évaluations ---
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph("<hr width='100%' color='#CCCCCC'/>", styles["Normal"]))
+            elements.append(PageBreak())
 
-                elements.append(Spacer(1, 10))
-                elements.append(Paragraph("<hr width='100%' color='#CCCCCC'/>", styles["Normal"]))
-                elements.append(PageBreak())
-
-        doc.build(elements)
-        buffer.seek(0)
+    doc.build(elements)
+    buffer.seek(0)
 
         st.download_button(
             label="⬇️ Télécharger les fiches PDF",
