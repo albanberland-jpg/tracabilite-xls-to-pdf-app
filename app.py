@@ -74,7 +74,7 @@ if uploaded_file:
 
     groupes_stagiaires = df.groupby(stagiaire_col)
 
-    def coloriser_valeur(val):
+   def coloriser_valeur(val):
     if not isinstance(val, str):
         return str(val)
 
@@ -92,8 +92,7 @@ if uploaded_file:
     elif val == "NA":
         return f"<font color='#C00000'><b>{val}</b></font>"  # rouge
     else:
-        return val
-        
+        return val        
     # --- Génération du PDF ---
     if st.button("📄 Générer les fiches PDF"):
         buffer = BytesIO()
