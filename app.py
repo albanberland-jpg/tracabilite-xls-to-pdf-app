@@ -55,12 +55,12 @@ def coloriser_valeur_html(val):
     # Définition des couleurs exactes demandées
     # IMPORTANT: L'ordre est maintenu (ECA avant A, car "A" pourrait être une sous-chaîne de "ECA" si la normalisation était différente)
     mapping = [
-        ("FAIT", "#007A33"),      # Vert foncé pour FAIT
-        ("ENCOURS", "#FFD700"),   # Jaune/Or pour EN COURS
-        ("NE", "#808080"),        # Gris pour NE
-        ("NA", "#C00000"),        # Rouge pour NA
-        ("ECA", "#ED7D31"),       # Orange pour ECA
-        ("A", "#00B050"),         # Vert clair pour A
+        ("Fait", "#007A33"),      # Vert foncé pour FAIT
+        ("En cours", "#FFD700"),   # Jaune/Or pour EN COURS
+        ("N.E.", "#808080"),        # Gris pour NE
+        ("N.A.", "#C00000"),        # Rouge pour NA
+        ("E.C.A.", "#ED7D31"),       # Orange pour ECA
+        ("A.", "#00B050"),         # Vert clair pour A
     ]
     
     # Nettoyage visuel de la valeur
