@@ -75,7 +75,6 @@ if uploaded_file:
     groupes_stagiaires = df.groupby(stagiaire_col)
 
     def coloriser_valeur(val):
-    """Retourne le texte coloré selon la valeur d'évaluation."""
     if not isinstance(val, str):
         return str(val)
 
