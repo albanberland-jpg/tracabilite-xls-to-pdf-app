@@ -5,26 +5,31 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch # Pour définir la largeur des colonnes
+from reportlab.lib.units import inch
 import unicodedata, re
 
 st.set_page_config(page_title="Tracabilité XLS → PDF", layout="centered")
 st.title("📘 Générateur de fiches d’évaluation")
-st.write("Ce script génère un PDF récapitulatif avec des tableaux colorés (couleur de fond de cellule).")
+st.write("Ce script génère un PDF récapitulatif avec des tableaux colorés (couleur de fond de cellule et couleur de police adaptée).")
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel (.xlsx)", type=["xlsx"])
 
 # --- COULEURS DE FOND DE CELLULE (Utilisation des couleurs ReportLab natives) ---
 COULEURS_FOND = {
     "FAIT": colors.HexColor("#A9D18E"),    # Vert clair Excel
-    "A": colors.HexColor("#70AD47"),       # Vert Excel
+    "A": colors.HexColor("#70AD47"),       # Vert foncé Excel
     "ENCOURS": colors.HexColor("#FFC000"), # Jaune/Orange Excel
     "ECA": colors.HexColor("#ED7D31"),     # Orange Excel
     "NE": colors.HexColor("#D9D9D9"),      # Gris clair
     "NA": colors.HexColor("#F8CBAD"),      # Rouge très clair
-    "THEORIE": colors.HexColor("#DEEBF6"), # Bleu clair pour Théorie (en-tête)
-    "APP": colors.HexColor("#FBE5D6"),     # Orange clair pour APP (en-tête)
 }
+
+# COULEURS DE POLICE ASSOCIÉES
+# Blanc pour le fond foncé 'A' (Vert foncé), Noir pour les autres
+COULEURS_POLICE = {
+    "A": colors.white, 
+}
+DEFAULT_POLICE_COLOR = colors.black
 
 # --- Utilities (Identiques pour la robustesse) ---
 def normaliser_colname(name):
@@ -52,12 +57,12 @@ def valeur_cle(val):
     s = ''.join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
     return s
 
-# --- Fonction de génération de tableau ---
+# --- Fonction de génération de tableau (AJOUT DE LA COULEUR DE POLICE) ---
 def generate_app_table(title, cols, row, item_style, item_bold_style):
     data = []
     styles = []
     
-    # 1. En-tête du tableau (comme dans votre image)
+    # 1. En-tête du tableau
     header = [
         Paragraph("<b>Séquence</b>", item_bold_style),
         Paragraph("<b>Résultats / Évaluations</b>", item_bold_style),
@@ -84,8 +89,14 @@ def generate_app_table(title, cols, row, item_style, item_bold_style):
             # 2b. Application du style de fond
             if note_cle in COULEURS_FOND:
                 styles.append(
-                    ('BACKGROUND', (0, row_idx), (1, row_idx), COULEURS_FOND[note_cle])
+                    ('BACKGROUND', (1, row_idx), (1, row_idx), COULEURS_FOND[note_cle]) # Colonne des notes (index 1)
                 )
+                
+            # 2c. APPLICATION DE LA COULEUR DE POLICE (C'est la correction !)
+            text_color = COULEURS_POLICE.get(note_cle, DEFAULT_POLICE_COLOR)
+            styles.append(
+                ('TEXTCOLOR', (1, row_idx), (1, row_idx), text_color)
+            )
             
             row_idx += 1
 
@@ -100,7 +111,7 @@ def generate_app_table(title, cols, row, item_style, item_bold_style):
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         # Style pour l'en-tête
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#D9E1F2")), # Gris/Bleu clair pour l'en-tête
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#D9E1F2")),
         ('ALIGN', (1, 0), (1, -1), 'CENTER'), # Aligne la colonne des notes au centre
     ]
     
@@ -112,7 +123,7 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
     df.columns = [normaliser_colname(c) for c in df.columns]
 
-    # Détection automatique
+    # Détection automatique des colonnes
     stagiaire_col = next((c for c in df.columns if "stagiaire" in c), None)
     date_col = next((c for c in df.columns if "date" in c), None)
     prenom_col = next((c for c in df.columns if "prenom" in c), None)
@@ -146,9 +157,7 @@ if uploaded_file:
     titre_style = ParagraphStyle("Titre", parent=styles["Heading1"], alignment=1, fontSize=18, textColor=colors.HexColor("#007A33"), spaceAfter=12)
     section_style = ParagraphStyle("Section", parent=styles["Heading3"], fontSize=12, textColor=colors.HexColor("#003366"), spaceBefore=8, spaceAfter=6)
     
-    # Styles pour le texte normal des cellules du tableau
     item_style = ParagraphStyle("Item", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, allowHTML=False)
-    # Style pour le texte en gras des en-têtes de tableau (si nécessaire)
     item_bold_style = ParagraphStyle("ItemBold", parent=styles["Normal"], fontSize=10, leading=13, spaceAfter=0, leftIndent=0, fontName='Helvetica-Bold')
 
 
@@ -165,10 +174,10 @@ if uploaded_file:
 
         # En-tête de fiche
         elements.append(Paragraph("Fiche d’évaluation", titre_style))
-        elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_style))
+        elements.append(Paragraph(f"<b>Stagiaire :</b> {nettoyer_texte_visible(stagiaire)}", item_bold_style))
         if date_col:
-            elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(first_row.get(date_col, ''))}", item_style))
-        elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(first_row.get('formateur_display', ''))}", item_style))
+            elements.append(Paragraph(f"<b>Date :</b> {nettoyer_texte_visible(first_row.get(date_col, ''))}", item_bold_style))
+        elements.append(Paragraph(f"<b>Formateur :</b> {nettoyer_texte_visible(first_row.get('formateur_display', ''))}", item_bold_style))
         elements.append(Spacer(1, 8))
 
         # --- GESTION DES SECTIONS APP EN TABLEAUX ---
@@ -191,7 +200,7 @@ if uploaded_file:
             elements.append(Paragraph("Aucun item", item_style))
         elements.append(Spacer(1, 6))
 
-        # --- GESTION DES SECTIONS TEXTE LIBRE (inchangée) ---
+        # --- GESTION DES SECTIONS TEXTE LIBRE ---
         
         # Fonction d'ajout de section (utilisée uniquement pour les blocs texte)
         def add_text_section(title, cols):
