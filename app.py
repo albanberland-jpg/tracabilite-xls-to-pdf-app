@@ -1,58 +1,57 @@
 import streamlit as st
 import pandas as pd
-from reportlab.lib import colors
+from io import BytesIO
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet
 
-st.set_page_config(page_title="Convertisseur XLS → PDF", layout="centered")
+# --- Interface principale ---
+st.set_page_config(page_title="Fiches d’évaluation", page_icon="📘")
+st.title("📘 Générateur de fiches d’évaluation")
+st.write("Importe ton fichier Excel (export de l’application) et génère automatiquement une fiche PDF par stagiaire.")
 
-st.title("📄 Convertisseur Excel → PDF")
-uploaded_file = st.file_uploader("📂 Importer un fichier Excel (.xlsx)", type=["xlsx"])
+# --- Upload du fichier Excel ---
+uploaded_file = st.file_uploader("Importer un fichier Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    st.success("Fichier importé avec succès !")
-    st.dataframe(df.head())
 
-    colonne_tri = st.selectbox("Trier par :", df.columns)
-    df_sorted = df.sort_values(by=colonne_tri)
+    st.success("✅ Fichier importé avec succès !")
+    st.dataframe(df.head())  # aperçu des premières lignes
 
-if st.button("Générer le PDF"):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
+    # --- Nettoyage du dataframe ---
+    colonnes_eval = [c for c in df.columns if "APP" in c or "Évaluation" in c or "Evaluation" in c]
+    if not colonnes_eval:
+        st.warning("⚠️ Aucune colonne d'évaluation détectée automatiquement. Vérifie les noms de colonnes.")
+    else:
+        df = df.dropna(how='all', subset=colonnes_eval)
 
-    pdf_path = "rapport.pdf"
-    doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+    # On trie par stagiaire + date si disponible
+    if "Date" in df.columns:
+        df = df.sort_values(by=["Nom du stagiaire", "Date"])
+    else:
+        df = df.sort_values(by=["Nom du stagiaire"])
 
-    # Styles et titre
-    styles = getSampleStyleSheet()
-    titre = Paragraph("Rapport Excel → PDF", styles["Title"])
+    groupes_stagiaires = df.groupby("Nom du stagiaire")
 
-    # Conversion des données
-    data = [df_sorted.columns.tolist()] + df_sorted.astype(str).values.tolist()
+    # --- Génération du PDF ---
+if st.button("📄 Générer les fiches PDF"):
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        elements = []
 
-    # Table stylisée
-    table = Table(data, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-    ]))
+        titre_global = Paragraph("📘 Fiches d’évaluation des stagiaires", styles["Title"])
+        elements.append(titre_global)
+        elements.append(Spacer(1, 12))
 
-    # Construction du PDF
-    elements = [titre, Spacer(1, 12), table]
-    doc.build(elements)
+        for nom_stagiaire, data_stagiaire in groupes_stagiaires:
+            elements.append(Paragraph(f"<b>Stagiaire :</b> {nom_stagiaire}", styles["Heading2"]))
+            elements.append(Spacer(1, 8))
 
-    # Téléchargement
-    with open(pdf_path, "rb") as f:
-        st.download_button("⬇️ Télécharger le PDF", f, file_name="rapport.pdf")
-
-
-    # Téléchargement
-    with open(pdf_path, "rb") as f:
-        st.download_button("⬇️ Télécharger le PDF", f, file_name="rapport.pdf")
+            for _, ligne in data_stagiaire.iterrows():
+                for col, val in ligne.items():
+                    if pd.notna(val) and col != "Nom du stagiaire":
+                        elements.append(Paragraph(f"<b>{col} :</b> {val}", styles["Normal"]))
+                elements.append(Spacer(1, 8))
+                elements.append(Paragraph("──────────────────────────────", styles["Normal"]))
