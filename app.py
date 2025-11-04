@@ -106,24 +106,24 @@ if uploaded_file:
                 elements.append(Spacer(1, 10))
 
                 # --- Section : APP non soumis à évaluation ---
-if app_non_evalues_cols:
-    elements.append(Paragraph("🟡 APP non soumis à évaluation", section_style))
-    for c in app_non_evalues_cols:
-        val = ligne.get(c)
-        if pd.notna(val):
-            nom_app = c.split("/")[-1].strip().capitalize() if "/" in c else c.capitalize()
-            elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
-    elements.append(Spacer(1, 8))
+                if app_non_evalues_cols:
+                    elements.append(Paragraph("🟡 APP non soumis à évaluation", section_style))
+            for c in app_non_evalues_cols:
+                val = ligne.get(c)
+                if pd.notna(val):
+                    nom_app = c.split("/")[-1].strip().capitalize() if "/" in c else c.capitalize()
+                    elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
+                elements.append(Spacer(1, 8))
 
-# --- Section : APP évalués ---
-if app_evalues_cols:
-    elements.append(Paragraph("🟢 APP évalués", section_style))
-    for c in app_evalues_cols:
-        val = ligne.get(c)
-        if pd.notna(val):
-            nom_app = c.split("/")[-1].strip().capitalize() if "/" in c else c.capitalize()
-            elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
-    elements.append(Spacer(1, 8))
+                # --- Section : APP évalués ---
+                if app_evalues_cols:
+                    elements.append(Paragraph("🟢 APP évalués", section_style))
+             for c in app_evalues_cols:
+                val = ligne.get(c)
+                if pd.notna(val):
+                    nom_app = c.split("/")[-1].strip().capitalize() if "/" in c else c.capitalize()
+                    elements.append(Paragraph(f"• {nom_app} : {val}", contenu_style))
+                elements.append(Spacer(1, 8))
 
                 # --- Section : Axe de progression ---
                 if axe_prog_cols:
