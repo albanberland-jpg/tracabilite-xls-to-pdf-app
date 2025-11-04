@@ -32,12 +32,16 @@ if uploaded_file:
 
     df.columns = [normaliser(c) for c in df.columns]
 
-    # --- Recherche des colonnes principales ---
-    prenom_col = next((c for c in df.columns if "prenom" in c), None)
-    nom_col = next((c for c in df.columns if "nom" in c and "prenom" not in c and "stagiaire" not in c), None)
-    stagiaire_col = next((c for c in df.columns if "stagiaire" in c or "participant" in c or "eleve" in c), None)
-    date_col = next((c for c in df.columns if "date" in c), None)
+    # --- Groupes de colonnes par thématique (plus flexibles) ---
+def contient_mot(c, *mots):
+    """Retourne True si la colonne contient un des mots donnés."""
+    return any(m in c for m in mots)
 
+app_non_evalues_cols = [c for c in df.columns if contient_mot(c, "non soumis", "non evalue")]
+app_evalues_cols = [c for c in df.columns if contient_mot(c, "app evalue", "app evalué", "app evaluee")]
+axe_prog_cols = [c for c in df.columns if contient_mot(c, "axe", "progression", "amelioration")]
+points_ancrage_cols = [c for c in df.columns if contient_mot(c, "ancrage", "point fort", "reussi")]
+app_proposes_cols = [c for c in df.columns if contient_mot(c, "propose", "proposition", "app a proposer", "a proposer")]
     if not stagiaire_col:
         st.error("❌ Impossible de trouver la colonne du stagiaire évalué.")
         st.stop()
