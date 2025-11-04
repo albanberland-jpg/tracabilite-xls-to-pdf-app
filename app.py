@@ -1,12 +1,3 @@
-Gemini
-Conversation avec Gemini
-es tu en mesure de corriger un code python?
-
-Oui, je peux vous aider à corriger du code Python.
-
-Veuillez me fournir le code Python que vous souhaitez corriger et m'expliquer quel est le problème ou l'erreur que vous rencontrez (par exemple, un message d'erreur spécifique, un comportement inattendu, un résultat incorrect).
-
-Plus vous me donnez de détails, plus il me sera facile de localiser et de corriger le problème !
 
 import streamlit as st
 
