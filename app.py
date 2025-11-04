@@ -145,7 +145,7 @@ if st.button("📄 Générer les fiches PDF"):
                     elements.append(Paragraph("APP non soumis à évaluation", section_style))
                     for c in app_non_evalues_cols:
                          val = ligne.get(c)
-                        if pd.notna(val):
+                    if pd.notna(val):
                             texte_colore = coloriser_valeur(str(val))
                     elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
 
@@ -154,7 +154,7 @@ if st.button("📄 Générer les fiches PDF"):
                     elements.append(Paragraph("APP évalués", section_style))
                     for c in app_evalues_cols:
                         val = ligne.get(c)
-                        if pd.notna(val):
+                    if pd.notna(val):
                             texte_colore = coloriser_valeur(str(val))
                     elements.append(Paragraph(f"• {c.split('/')[-1].capitalize()} : {texte_colore}", contenu_style))
 
