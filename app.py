@@ -74,7 +74,7 @@ if uploaded_file:
 
     groupes_stagiaires = df.groupby(stagiaire_col)
 
-   def coloriser_valeur(val):
+def coloriser_valeur(val):
     if not isinstance(val, str):
         return str(val)
 
