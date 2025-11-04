@@ -113,3 +113,20 @@ if uploaded_file:
                         elements.append(Paragraph(f"<b>{col_affiche} :</b> {val}", champ_style))
 
                 elements.append(Spacer(1, 10))
+                elements.append(Paragraph("<hr width='100%' color='#AAAAAA'/>", styles["Normal"]))
+                elements.append(Spacer(1, 10))
+
+            elements.append(PageBreak())
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        st.download_button(
+            label="⬇️ Télécharger les fiches PDF",
+            data=buffer,
+            file_name="fiches_evaluations.pdf",
+            mime="application/pdf"
+        )
+
+else:
+    st.info("📂 En attente du fichier Excel (.xlsx) à importer.")
