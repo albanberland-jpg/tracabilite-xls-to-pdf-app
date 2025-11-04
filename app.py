@@ -66,9 +66,9 @@ if uploaded_file:
     # --- Groupes de colonnes par thématique ---
     app_non_evalues_cols = [c for c in df.columns if "non soumis" in c]
     app_evalues_cols = [c for c in df.columns if "app evalue" in c or "app évalué" in c]
-    axe_prog_cols = [c for c in df.columns if "axe de progression" in c]
+    axe_prog_cols = [c for c in df.columns if "axes de progression" in c]
     points_ancrage_cols = [c for c in df.columns if "points d ancrage" in c or "ancrage" in c]
-    app_proposes_cols = [c for c in df.columns if "app qui pourraient" in c or "proposes" in c]
+    app_proposes_cols = [c for c in df.columns if "app qui pourrait" in c or "propose" in c]
 
     # --- Tri des données ---
     if date_col:
