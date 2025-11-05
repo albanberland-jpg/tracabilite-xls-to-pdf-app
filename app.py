@@ -106,12 +106,13 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
 
     df_sorted = df.sort_values(by=[stagiaire_col_name])
     
-    # --- FIX V3 : Renforcement du nettoyage des colonnes Formateur (avec vérification de l'existence de la colonne) ---
+    # --- FIX FINAL : Nettoyage des colonnes Formateur ---
+    # Ces colonnes sont garanties d'exister par le flux Streamlit
     if prenom_col and prenom_col in df_sorted.columns:
         df_sorted[prenom_col] = df_sorted[prenom_col].fillna("").astype(str)
     if nom_col and nom_col in df_sorted.columns:
         df_sorted[nom_col] = df_sorted[nom_col].fillna("").astype(str)
-    # --- FIN FIX V3 ---
+    # --- FIN FIX FINAL ---
 
     eval_columns = detect_eval_columns(df_sorted)
     
@@ -174,8 +175,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 else:
                     date_label = str(date_key)
 
-            # --- DÉTERMINATION DU FORMATEUR ---
-            # FIX V3 : Vérification explicite des colonnes avant de tenter d'accéder aux données
+            # --- DÉTERMINATION DU FORMATEUR (Basée sur les colonnes A et B passées) ---
             if prenom_col and nom_col and prenom_col in sub.columns and nom_col in sub.columns:
                 fm = []
                 for _, r in sub.iterrows():
@@ -361,14 +361,19 @@ if uploaded_file is not None:
         st.stop()
 
     # Détection des colonnes Formateur (Prénom et Nom - Colonnes A et B)
-    prenom_col = None
-    nom_col = None
-    for c in df.columns:
-        lc = c.lower()
-        if 'prenom' in lc and prenom_col is None:
-            prenom_col = c
-        if ('nom' == lc or ('nom' in lc and 'prenom' not in lc)) and nom_col is None:
-            nom_col = c
+    # FIX FINAL: Utilisation forcée des deux premières colonnes (index 0 et 1)
+    prenom_col = df.columns[0] if len(df.columns) > 0 else None
+    nom_col = df.columns[1] if len(df.columns) > 1 else None
+
+    # On s'assure que si la colonne du Stagiaire a été trouvée par mot-clé et qu'elle est en position A, on prend la suivante pour le prénom du formateur
+    # Note: Dans la plupart des cas, Stag_col est plus loin, mais cette sécurité est ajoutée.
+    if prenom_col == stag_col and len(df.columns) > 1:
+        prenom_col = df.columns[1]
+    
+    # Si Nom et Prénom sont la même colonne après l'ajustement, on prend la suivante pour le nom
+    if nom_col == prenom_col and len(df.columns) > 2:
+        nom_col = df.columns[2]
+
 
     # Détection de la colonne Date
     date_col = None
@@ -377,7 +382,7 @@ if uploaded_file is not None:
             date_col = c
             break
 
-    st.write(f"Stagiaire col: **{stag_col}** | Prenom formateur col détectée: **{prenom_col}** | Nom formateur col détectée: **{nom_col}** | Date col: **{date_col}**")
+    st.write(f"Stagiaire col: **{stag_col}** | Prénom formateur col (Force A): **{prenom_col}** | Nom formateur col (Force B): **{nom_col}** | Date col: **{date_col}**")
 
     if st.button("📄 Générer la synthèse PDF (une page par stagiaire)"):
         try:
