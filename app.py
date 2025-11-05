@@ -128,7 +128,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
     
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], alignment=1, fontSize=16, textColor=colors.HexColor("#0B5394"))
     subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], alignment=1, fontSize=9, textColor=colors.grey)
-    name_style = ParagraphStyle("Name", parent=styles["Heading2"], alignment=1, fontSize=14, textColor=colors.HexColor("#0B5394"), spaceAfter=6) 
+    name_style = ParagraphStyle("Name", parent=styles["Heading2"], alignment=1, fontSize=14, textColor=colors.HexColor("#5472ae"), spaceAfter=6) 
     cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
     legend_style = ParagraphStyle("Legend", parent=styles["Normal"], fontSize=8, spaceBefore=12) 
     h4_style = ParagraphStyle("sec_h4", parent=styles["Heading4"], textColor=colors.HexColor("#0B5394"), spaceBefore=8)
