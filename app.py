@@ -56,11 +56,11 @@ def normalize_value_key(v) -> str:
     s = re.sub(r"[^A-Z0-9]", "", s)
     return s
 
-# --- NOUVEAU : Gère le fond et la couleur de police pour le tableau ---
+# --- Gère le fond et la couleur de police pour le tableau ---
 def get_style_colors(v):
     k = normalize_value_key(v)
     
-    # Couleurs de fond (similaire à la synthèse Excel que vous aviez)
+    # Couleurs de fond 
     bg_color_map = {
         "FAIT": colors.HexColor("#A9D18E"),    # Vert clair
         "A": colors.HexColor("#70AD47"),       # Vert foncé
@@ -105,7 +105,7 @@ def detect_eval_columns(df):
         nc = normalise_colname(c)
         if any(m in nc for m in meta_keywords):
             continue
-        if ("app_" in nc) or ("evaluation" in nc) or ("msp" in nc) or ("test" in nc) or ("axe" in nc) or ("ancrage" in nc):
+        if ("app_" in nc) or ("evaluation" in nc) or ("msp" in nc) or ("test" in nc) or ("axe" in nc) or ("ancrage" in nc) or ("prop" in nc):
             eval_cols.append(c)
         else:
             sample_vals = df[c].dropna().astype(str).head(10).tolist()
@@ -127,24 +127,29 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
 
     df_sorted = df.sort_values(by=[stagiaire_col_name])
     eval_columns = detect_eval_columns(df_sorted)
+    
+    # --- DÉTECTION DES COLONNES DE COMMENTAIRE LITÉRALE (à exclure des tableaux) ---
+    # Ces listes sont utilisées pour exclure les colonnes du regroupement en tableau
+    axes_cols = [c for c in df.columns if "axe" in normalise_colname(c) or "progression" in normalise_colname(c)]
+    ancrage_cols = [c for c in df.columns if "ancrag" in normalise_colname(c) or "ancrage" in normalise_colname(c) or "point_d'ancrage" in normalise_colname(c)]
+    app_prop_cols = [c for c in df.columns if "app_qui" in normalise_colname(c) or "pourrait" in normalise_colname(c) or "propose" in normalise_colname(c)]
+    exclude_cols_set = set(axes_cols + ancrage_cols + app_prop_cols)
 
-    # Build styles (AJUSTÉS)
+
+    # Build styles 
     styles = getSampleStyleSheet()
     
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], alignment=1, fontSize=16, textColor=colors.HexColor("#0B5394"))
     subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], alignment=1, fontSize=9, textColor=colors.grey)
     name_style = ParagraphStyle("Name", parent=styles["Heading2"], alignment=1, fontSize=14, textColor=colors.HexColor("#0B5394"), spaceAfter=6) 
     
-    # Styles de base des cellules de texte
     cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
     legend_style = ParagraphStyle("Legend", parent=styles["Normal"], fontSize=8, spaceBefore=12) 
     
-    # Style de la bande de section (Utilisé pour le titre de section)
-    band_style = ParagraphStyle("Band", parent=styles["Normal"], alignment=0, textColor=colors.white, fontSize=10, leading=12, fontName='Helvetica-Bold')
-    band_bg = colors.HexColor("#0B5394") # Bleu foncé pour le contraste
-    
-    buffer = BytesIO()
+    # Style pour les titres de section de texte libre
+    h4_style = ParagraphStyle("sec_h4", parent=styles["Heading4"], textColor=colors.HexColor("#0B5394"), spaceBefore=8)
 
+    buffer = BytesIO()
     elements_all = []
     grouped = df_sorted.groupby(stagiaire_col_name, sort=True)
     export_dt = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -201,7 +206,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
             else:
                 formateur_label = "—"
 
-            # Date + Formateur (plus espacé)
+            # Date + Formateur
             if date_label:
                 page_elements.append(Paragraph(f"<b>Date :</b> {escape(date_label)}    <b>Formateur :</b> {escape(clean_display_text(formateur_label))}", cell_style))
             else:
@@ -212,6 +217,10 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
             # Group evaluation columns
             type_buckets = {}
             for col in eval_columns:
+                # 1. Écarter les colonnes de commentaire littéral
+                if col in exclude_cols_set:
+                    continue 
+
                 include_col = False
                 for _, r in sub.iterrows():
                     v = r.get(col, "")
@@ -220,44 +229,42 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                         break
                 if not include_col:
                     continue
+                
+                # 2. Classer les colonnes et supprimer "AUTRE ÉVALUATION"
                 nc = normalise_colname(col)
+                t = None
                 if "msp" in nc or "victime" in nc:
                     t = "ÉVALUATION DES MSP"
                 elif "app_non" in nc or "non_soumis" in nc:
-                    t = "APP NON SOUMIS À ÉVALUATION"
+                    t = "APP non soumis à évaluation"
                 elif "app_evalue" in nc or "app_eval" in nc or nc.startswith("app_"):
-                    t = "APP ÉVALUÉS"
-                else:
-                    t = "AUTRE ÉVALUATION"
-                type_buckets.setdefault(t, []).append(col)
+                    t = "APP évalués"
+                
+                if t:
+                    type_buckets.setdefault(t, []).append(col)
 
             if not type_buckets:
-                page_elements.append(Paragraph("Aucune évaluation renseignée pour cette date.", cell_style))
+                page_elements.append(Paragraph("Aucune évaluation technique renseignée pour cette date.", cell_style))
                 page_elements.append(Spacer(1, 6))
                 continue
 
-            # For each type, add band and table
+            # For each type, add table
             for tlabel, cols in type_buckets.items():
-                # band
-                band_table = Table([[Paragraph(f"<b>{escape(tlabel)}</b>", band_style)]], colWidths=[17*cm]) # Élargir un peu
-                band_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, -1), band_bg),
-                    ('LEFTPADDING', (0,0), (-1,-1), 8),
-                    ('RIGHTPADDING', (0,0), (-1,-1), 8),
-                    ('TOPPADDING', (0,0), (-1,-1), 4),
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-                ]))
-                page_elements.append(band_table)
-                page_elements.append(Spacer(1, 4))
+                
+                # Suppression du band_table ici (point de l'utilisateur)
+                # page_elements.append(band_table)
+                # page_elements.append(Spacer(1, 4)) # Supprimé également
 
                 # Build table rows
                 tbl_rows = []
-                header = [Paragraph("<b>Séquence / Épreuve</b>", cell_style), Paragraph("<b>Résultat</b>", cell_style)]
+                
+                # 1. Ajustement de l'en-tête de la première colonne (point de l'utilisateur)
+                header = [Paragraph(f"<b>{escape(tlabel)}</b>", cell_style), Paragraph("<b>Résultat</b>", cell_style)]
                 tbl_rows.append(header)
                 
                 # TableStyle (sera rempli dans la boucle)
                 table_style = TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6EB3")), # En-tête bleu
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6EB3")), 
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                     ('ALIGN', (0,0), (-1,0), 'CENTER'),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -267,10 +274,10 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                     ('RIGHTPADDING', (0,0), (-1,-1), 6),
                     ('TOPPADDING', (0,0), (-1,-1), 4),
                     ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-                    ('ALIGN', (1,1), (1,-1), 'CENTER'), # Centre les résultats de la colonne 1
+                    ('ALIGN', (1,1), (1,-1), 'CENTER'),
                 ])
                 
-                row_idx_in_table = 1 # Démarre après l'en-tête (index 0)
+                row_idx_in_table = 1 
 
                 for col in cols:
                     seq_label = col
@@ -290,12 +297,9 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                         continue
                     combined_val = " / ".join(vals)
                     
-                    # NOUVEAU : Récupérer les couleurs
                     bg_color, text_color = get_style_colors(combined_val)
                     
                     seq_par = Paragraph(escape(seq_label), cell_style)
-                    
-                    # Style de la valeur avec couleur de police adaptée et centré
                     val_style_custom = ParagraphStyle("val_custom", parent=cell_style, textColor=text_color, alignment=1)
                     val_par = Paragraph(escape(combined_val), val_style_custom)
                     
@@ -305,7 +309,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                     if bg_color != colors.white:
                         table_style.add('BACKGROUND', (0, row_idx_in_table), (-1, row_idx_in_table), bg_color)
                         
-                    # Alternance de fond (maintenu, mais écrasé par la couleur conditionnelle)
+                    # Alternance de fond
                     if row_idx_in_table % 2 == 0 and bg_color == colors.white:
                         table_style.add('BACKGROUND', (0,row_idx_in_table), (-1,row_idx_in_table), colors.whitesmoke)
                         
@@ -318,26 +322,22 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 page_elements.append(table)
                 page_elements.append(Spacer(1, 6))
 
-        # --- Sections de texte libre (Axes, Ancrage, etc.) ---
+        # --- Sections de texte libre (Axes, Ancrage, APP proposés) ---
         def first_nonempty_from_group(cols_list):
             for c in cols_list:
                 if c in df.columns:
+                    # Utiliser la première ligne disponible de l'intégralité du groupe stagiaire
                     v = group.iloc[0].get(c, "")
                     if pd.notna(v) and str(v).strip():
                         return clean_display_text(v)
             return ""
-
-        axes_cols = [c for c in df.columns if "axe" in normalise_colname(c) or "progression" in normalise_colname(c)]
-        ancrage_cols = [c for c in df.columns if "ancrag" in normalise_colname(c) or "ancrage" in normalise_colname(c) or "point_d'ancrage" in normalise_colname(c)]
-        app_prop_cols = [c for c in df.columns if "app_qui" in normalise_colname(c) or "pourrait" in normalise_colname(c) or "propose" in normalise_colname(c)]
-
+        
+        # Les listes axes_cols, ancrage_cols, app_prop_cols sont utilisées ici
         axes_text = first_nonempty_from_group(axes_cols)
         ancrage_text = first_nonempty_from_group(ancrage_cols)
         app_prop_text = first_nonempty_from_group(app_prop_cols)
 
-        # Style pour les titres de section (H4)
-        h4_style = ParagraphStyle("sec_h4", parent=styles["Heading4"], textColor=colors.HexColor("#0B5394"), spaceBefore=8)
-
+        # Les titres sont ceux demandés par l'utilisateur
         if axes_text:
             page_elements.append(Paragraph("<b>Axes de progression</b>", h4_style))
             page_elements.append(Paragraph(escape(axes_text), cell_style))
@@ -370,6 +370,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
 # ---------------- Streamlit flow ----------------
 if uploaded_file is not None:
     try:
+        # Tenter d'importer le fichier, en forçant le dtype=str pour une meilleure gestion des colonnes hétérogènes
         df = pd.read_excel(uploaded_file, dtype=str)
     except Exception as e:
         st.error(f"Erreur lecture fichier : {e}")
@@ -392,7 +393,8 @@ if uploaded_file is not None:
         lc = c.lower()
         if 'prenom' in lc and prenom_col is None:
             prenom_col = c
-        if 'nom' == lc or ('nom' in lc and 'prenom' not in lc) and nom_col is None:
+        # Ne pas confondre la colonne 'Nom' avec le nom d'une autre colonne contenant 'nom' (ex: nom_organisation)
+        if ('nom' == lc or ('nom' in lc and 'prenom' not in lc)) and nom_col is None:
             nom_col = c
 
     date_col = None
