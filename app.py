@@ -241,7 +241,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 tbl_rows.append(header)
                 
                 table_style = TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#76a9de")), 
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#b8d6f5")), 
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                     ('ALIGN', (0,0), (-1,0), 'CENTER'),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
