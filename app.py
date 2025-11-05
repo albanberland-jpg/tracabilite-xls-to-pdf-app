@@ -56,7 +56,7 @@ def normalize_value_key(v) -> str:
     s = re.sub(r"[^A-Z0-9]", "", s)
     return s
 
-# --- Rétabli: Cette fonction retourne UNIQUEMENT la couleur du TEXTE ---
+# --- Fonction Rétablie pour la couleur du texte UNIQUEMENT ---
 def color_for_value(v):
     k = normalize_value_key(v)
     if k in ("FAIT", "A"):
@@ -117,13 +117,12 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
     # Build styles 
     styles = getSampleStyleSheet()
     
+    # Styles ajustés
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], alignment=1, fontSize=16, textColor=colors.HexColor("#0B5394"))
     subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], alignment=1, fontSize=9, textColor=colors.grey)
     name_style = ParagraphStyle("Name", parent=styles["Heading2"], alignment=1, fontSize=14, textColor=colors.HexColor("#0B5394"), spaceAfter=6) 
-    
     cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
     legend_style = ParagraphStyle("Legend", parent=styles["Normal"], fontSize=8, spaceBefore=12) 
-    
     h4_style = ParagraphStyle("sec_h4", parent=styles["Heading4"], textColor=colors.HexColor("#0B5394"), spaceBefore=8)
 
     buffer = BytesIO()
@@ -194,7 +193,6 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
             # Group evaluation columns
             type_buckets = {}
             for col in eval_columns:
-                # 1. Écarter les colonnes de commentaire littéral
                 if col in exclude_cols_set:
                     continue 
 
@@ -207,7 +205,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 if not include_col:
                     continue
                 
-                # 2. Classer les colonnes et supprimer "AUTRE ÉVALUATION"
+                # Classer les colonnes (sans "AUTRE ÉVALUATION")
                 nc = normalise_colname(col)
                 t = None
                 if "msp" in nc or "victime" in nc:
@@ -228,14 +226,12 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
             # For each type, add table
             for tlabel, cols in type_buckets.items():
                 
-                # Build table rows
                 tbl_rows = []
                 
-                # Ajustement de l'en-tête de la première colonne 
+                # En-tête de colonne dynamique
                 header = [Paragraph(f"<b>{escape(tlabel)}</b>", cell_style), Paragraph("<b>Résultat</b>", cell_style)]
                 tbl_rows.append(header)
                 
-                # TableStyle (sera rempli dans la boucle)
                 table_style = TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6EB3")), 
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -270,16 +266,17 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                         continue
                     combined_val = " / ".join(vals)
                     
-                    # --- Rétablissement de la couleur de police selon la fonction color_for_value ---
+                    # Récupération de la couleur de police (couleur_for_value)
                     text_color = color_for_value(combined_val)
                     
                     seq_par = Paragraph(escape(seq_label), cell_style)
+                    # Application de la couleur de police
                     val_style_custom = ParagraphStyle("val_custom", parent=cell_style, textColor=text_color, alignment=1)
                     val_par = Paragraph(escape(combined_val), val_style_custom)
                     
                     tbl_rows.append([seq_par, val_par])
                     
-                    # --- Rétablissement de l'alternance de fond simple (trame de fond) ---
+                    # Alternance de fond simple (whitesmoke)
                     if row_idx_in_table % 2 == 0:
                         table_style.add('BACKGROUND', (0,row_idx_in_table), (-1,row_idx_in_table), colors.whitesmoke)
                         
@@ -292,7 +289,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 page_elements.append(table)
                 page_elements.append(Spacer(1, 6))
 
-        # --- Sections de texte libre (Axes, Ancrage, APP proposés) ---
+        # --- Sections de texte libre ---
         def first_nonempty_from_group(cols_list):
             for c in cols_list:
                 if c in df.columns:
