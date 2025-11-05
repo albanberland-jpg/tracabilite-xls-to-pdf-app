@@ -56,41 +56,19 @@ def normalize_value_key(v) -> str:
     s = re.sub(r"[^A-Z0-9]", "", s)
     return s
 
-# --- Gère le fond et la couleur de police pour le tableau ---
-def get_style_colors(v):
-    k = normalize_value_key(v)
-    
-    # Couleurs de fond 
-    bg_color_map = {
-        "FAIT": colors.HexColor("#A9D18E"),    # Vert clair
-        "A": colors.HexColor("#70AD47"),       # Vert foncé
-        "ENCOURS": colors.HexColor("#FFC000"), # Jaune/Orange
-        "ECA": colors.HexColor("#ED7D31"),     # Orange
-        "NA": colors.HexColor("#F8CBAD"),      # Rouge très clair
-        "NE": colors.HexColor("#D9D9D9"),      # Gris clair
-    }
-    
-    # Couleurs de police : blanc pour le vert foncé ('A'), noir pour le reste
-    text_color_map = {
-        "A": colors.white,
-    }
-    
-    bg = bg_color_map.get(k, colors.white)
-    text = text_color_map.get(k, colors.black)
-    
-    return bg, text
-
+# --- Rétabli: Cette fonction retourne UNIQUEMENT la couleur du TEXTE ---
 def color_for_value(v):
-    """(Maintenu pour l'ancienne logique de texte simple si elle subsiste)"""
     k = normalize_value_key(v)
     if k in ("FAIT", "A"):
-        return colors.HexColor("#007A33")
-    if k in ("ENCOURS", "ECA"):
-        return colors.HexColor("#ED7D31")
+        return colors.HexColor("#007A33")  # vert foncé
+    if k in ("ENCOURS", "ENCOURS"):
+        return colors.HexColor("#FFD700")  # jaune
+    if k in ("ECA", "ECA"):
+        return colors.HexColor("#ED7D31")  # orange
     if k in ("NA", "N.A"):
-        return colors.HexColor("#C00000")
+        return colors.HexColor("#C00000")  # rouge
     if k in ("NE",):
-        return colors.HexColor("#808080")
+        return colors.HexColor("#808080")  # gris
     return colors.black
 
 def detect_eval_columns(df):
@@ -105,6 +83,7 @@ def detect_eval_columns(df):
         nc = normalise_colname(c)
         if any(m in nc for m in meta_keywords):
             continue
+        # Inclut les colonnes de texte libre pour le traitement initial, elles seront filtrées plus tard
         if ("app_" in nc) or ("evaluation" in nc) or ("msp" in nc) or ("test" in nc) or ("axe" in nc) or ("ancrage" in nc) or ("prop" in nc):
             eval_cols.append(c)
         else:
@@ -129,7 +108,6 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
     eval_columns = detect_eval_columns(df_sorted)
     
     # --- DÉTECTION DES COLONNES DE COMMENTAIRE LITÉRALE (à exclure des tableaux) ---
-    # Ces listes sont utilisées pour exclure les colonnes du regroupement en tableau
     axes_cols = [c for c in df.columns if "axe" in normalise_colname(c) or "progression" in normalise_colname(c)]
     ancrage_cols = [c for c in df.columns if "ancrag" in normalise_colname(c) or "ancrage" in normalise_colname(c) or "point_d'ancrage" in normalise_colname(c)]
     app_prop_cols = [c for c in df.columns if "app_qui" in normalise_colname(c) or "pourrait" in normalise_colname(c) or "propose" in normalise_colname(c)]
@@ -146,7 +124,6 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
     cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
     legend_style = ParagraphStyle("Legend", parent=styles["Normal"], fontSize=8, spaceBefore=12) 
     
-    # Style pour les titres de section de texte libre
     h4_style = ParagraphStyle("sec_h4", parent=styles["Heading4"], textColor=colors.HexColor("#0B5394"), spaceBefore=8)
 
     buffer = BytesIO()
@@ -251,14 +228,10 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
             # For each type, add table
             for tlabel, cols in type_buckets.items():
                 
-                # Suppression du band_table ici (point de l'utilisateur)
-                # page_elements.append(band_table)
-                # page_elements.append(Spacer(1, 4)) # Supprimé également
-
                 # Build table rows
                 tbl_rows = []
                 
-                # 1. Ajustement de l'en-tête de la première colonne (point de l'utilisateur)
+                # Ajustement de l'en-tête de la première colonne 
                 header = [Paragraph(f"<b>{escape(tlabel)}</b>", cell_style), Paragraph("<b>Résultat</b>", cell_style)]
                 tbl_rows.append(header)
                 
@@ -297,7 +270,8 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                         continue
                     combined_val = " / ".join(vals)
                     
-                    bg_color, text_color = get_style_colors(combined_val)
+                    # --- Rétablissement de la couleur de police selon la fonction color_for_value ---
+                    text_color = color_for_value(combined_val)
                     
                     seq_par = Paragraph(escape(seq_label), cell_style)
                     val_style_custom = ParagraphStyle("val_custom", parent=cell_style, textColor=text_color, alignment=1)
@@ -305,12 +279,8 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                     
                     tbl_rows.append([seq_par, val_par])
                     
-                    # AJOUT DU FOND DE CELLULE CONDITIONNEL
-                    if bg_color != colors.white:
-                        table_style.add('BACKGROUND', (0, row_idx_in_table), (-1, row_idx_in_table), bg_color)
-                        
-                    # Alternance de fond
-                    if row_idx_in_table % 2 == 0 and bg_color == colors.white:
+                    # --- Rétablissement de l'alternance de fond simple (trame de fond) ---
+                    if row_idx_in_table % 2 == 0:
                         table_style.add('BACKGROUND', (0,row_idx_in_table), (-1,row_idx_in_table), colors.whitesmoke)
                         
                     row_idx_in_table += 1
@@ -326,18 +296,15 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
         def first_nonempty_from_group(cols_list):
             for c in cols_list:
                 if c in df.columns:
-                    # Utiliser la première ligne disponible de l'intégralité du groupe stagiaire
                     v = group.iloc[0].get(c, "")
                     if pd.notna(v) and str(v).strip():
                         return clean_display_text(v)
             return ""
         
-        # Les listes axes_cols, ancrage_cols, app_prop_cols sont utilisées ici
         axes_text = first_nonempty_from_group(axes_cols)
         ancrage_text = first_nonempty_from_group(ancrage_cols)
         app_prop_text = first_nonempty_from_group(app_prop_cols)
 
-        # Les titres sont ceux demandés par l'utilisateur
         if axes_text:
             page_elements.append(Paragraph("<b>Axes de progression</b>", h4_style))
             page_elements.append(Paragraph(escape(axes_text), cell_style))
@@ -370,7 +337,6 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
 # ---------------- Streamlit flow ----------------
 if uploaded_file is not None:
     try:
-        # Tenter d'importer le fichier, en forçant le dtype=str pour une meilleure gestion des colonnes hétérogènes
         df = pd.read_excel(uploaded_file, dtype=str)
     except Exception as e:
         st.error(f"Erreur lecture fichier : {e}")
@@ -393,7 +359,6 @@ if uploaded_file is not None:
         lc = c.lower()
         if 'prenom' in lc and prenom_col is None:
             prenom_col = c
-        # Ne pas confondre la colonne 'Nom' avec le nom d'une autre colonne contenant 'nom' (ex: nom_organisation)
         if ('nom' == lc or ('nom' in lc and 'prenom' not in lc)) and nom_col is None:
             nom_col = c
 
