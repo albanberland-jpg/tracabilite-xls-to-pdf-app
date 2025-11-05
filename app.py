@@ -106,13 +106,12 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
 
     df_sorted = df.sort_values(by=[stagiaire_col_name])
     
-    # --- FIX: Renforcement du nettoyage des colonnes Formateur ---
-    if prenom_col in df_sorted.columns:
-        # Nettoyer et forcer en string pour éviter les NaN ou les types mixtes lors de l'itération
+    # --- FIX V3 : Renforcement du nettoyage des colonnes Formateur (avec vérification de l'existence de la colonne) ---
+    if prenom_col and prenom_col in df_sorted.columns:
         df_sorted[prenom_col] = df_sorted[prenom_col].fillna("").astype(str)
-    if nom_col in df_sorted.columns:
+    if nom_col and nom_col in df_sorted.columns:
         df_sorted[nom_col] = df_sorted[nom_col].fillna("").astype(str)
-    # --- FIN FIX ---
+    # --- FIN FIX V3 ---
 
     eval_columns = detect_eval_columns(df_sorted)
     
@@ -176,12 +175,11 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                     date_label = str(date_key)
 
             # --- DÉTERMINATION DU FORMATEUR ---
-            if prenom_col in group.columns and nom_col in group.columns:
-                # Les colonnes sont déjà nettoyées (fillna("") et astype(str))
+            # FIX V3 : Vérification explicite des colonnes avant de tenter d'accéder aux données
+            if prenom_col and nom_col and prenom_col in sub.columns and nom_col in sub.columns:
                 fm = []
                 for _, r in sub.iterrows():
-                    # r est un Series du sous-groupe (sub)
-                    p = r[prenom_col].strip() # Utilise r[col] car déjà .astype(str)
+                    p = r[prenom_col].strip()
                     n = r[nom_col].strip()
                     if (p or n):
                         name = f"{p} {n}".strip()
@@ -303,6 +301,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
         def first_nonempty_from_group(cols_list):
             for c in cols_list:
                 if c in df.columns:
+                    # Utiliser la première ligne disponible de l'intégralité du groupe stagiaire
                     v = group.iloc[0].get(c, "")
                     if pd.notna(v) and str(v).strip():
                         return clean_display_text(v)
@@ -378,7 +377,7 @@ if uploaded_file is not None:
             date_col = c
             break
 
-    st.write(f"Stagiaire col: **{stag_col}** | Prenom formateur col: **{prenom_col}** | Nom formateur col: **{nom_col}** | Date col: **{date_col}**")
+    st.write(f"Stagiaire col: **{stag_col}** | Prenom formateur col détectée: **{prenom_col}** | Nom formateur col détectée: **{nom_col}** | Date col: **{date_col}**")
 
     if st.button("📄 Générer la synthèse PDF (une page par stagiaire)"):
         try:
