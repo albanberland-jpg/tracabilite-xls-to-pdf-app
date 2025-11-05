@@ -56,7 +56,7 @@ def normalize_value_key(v) -> str:
     s = re.sub(r"[^A-Z0-9]", "", s)
     return s
 
-# --- Fonction Rétablie pour la couleur du texte UNIQUEMENT ---
+# --- Fonction pour la couleur du texte ---
 def color_for_value(v):
     k = normalize_value_key(v)
     if k in ("FAIT", "A"):
@@ -105,6 +105,15 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
         df["_parsed_date"] = pd.NaT
 
     df_sorted = df.sort_values(by=[stagiaire_col_name])
+    
+    # --- FIX: Renforcement du nettoyage des colonnes Formateur ---
+    if prenom_col in df_sorted.columns:
+        # Nettoyer et forcer en string pour éviter les NaN ou les types mixtes lors de l'itération
+        df_sorted[prenom_col] = df_sorted[prenom_col].fillna("").astype(str)
+    if nom_col in df_sorted.columns:
+        df_sorted[nom_col] = df_sorted[nom_col].fillna("").astype(str)
+    # --- FIN FIX ---
+
     eval_columns = detect_eval_columns(df_sorted)
     
     # --- DÉTECTION DES COLONNES DE COMMENTAIRE LITÉRALE (à exclure des tableaux) ---
@@ -117,7 +126,6 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
     # Build styles 
     styles = getSampleStyleSheet()
     
-    # Styles ajustés
     title_style = ParagraphStyle("Title", parent=styles["Heading1"], alignment=1, fontSize=16, textColor=colors.HexColor("#0B5394"))
     subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], alignment=1, fontSize=9, textColor=colors.grey)
     name_style = ParagraphStyle("Name", parent=styles["Heading2"], alignment=1, fontSize=14, textColor=colors.HexColor("#0B5394"), spaceAfter=6) 
@@ -167,13 +175,14 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 else:
                     date_label = str(date_key)
 
-            # Determine formateurs present for that date
+            # --- DÉTERMINATION DU FORMATEUR ---
             if prenom_col in group.columns and nom_col in group.columns:
-                formateurs = sub[[prenom_col, nom_col]].fillna("").astype(str)
+                # Les colonnes sont déjà nettoyées (fillna("") et astype(str))
                 fm = []
-                for _, r in formateurs.iterrows():
-                    p = r.get(prenom_col, "").strip()
-                    n = r.get(nom_col, "").strip()
+                for _, r in sub.iterrows():
+                    # r est un Series du sous-groupe (sub)
+                    p = r[prenom_col].strip() # Utilise r[col] car déjà .astype(str)
+                    n = r[nom_col].strip()
                     if (p or n):
                         name = f"{p} {n}".strip()
                         if name not in fm:
@@ -181,6 +190,7 @@ def build_pdf_bytes(df, stagiaire_col_name, prenom_col, nom_col, date_col):
                 formateur_label = ", ".join(fm) if fm else "—"
             else:
                 formateur_label = "—"
+            # --- FIN DÉTERMINATION FORMATEUR ---
 
             # Date + Formateur
             if date_label:
@@ -341,6 +351,7 @@ if uploaded_file is not None:
 
     st.write("Colonnes importées :", list(df.columns))
 
+    # Détection de la colonne Stagiaire
     stag_col = None
     for c in df.columns:
         if 'stagiaire' in c.lower() or 'participant' in c.lower() or 'élève' in c.lower() or 'eleve' in c.lower():
@@ -350,6 +361,7 @@ if uploaded_file is not None:
         st.error("Colonne 'Stagiaire évalué' non trouvée. Vérifie le fichier.")
         st.stop()
 
+    # Détection des colonnes Formateur (Prénom et Nom - Colonnes A et B)
     prenom_col = None
     nom_col = None
     for c in df.columns:
@@ -359,13 +371,14 @@ if uploaded_file is not None:
         if ('nom' == lc or ('nom' in lc and 'prenom' not in lc)) and nom_col is None:
             nom_col = c
 
+    # Détection de la colonne Date
     date_col = None
     for c in df.columns:
         if 'date' in c.lower():
             date_col = c
             break
 
-    st.write(f"Stagiaire col: **{stag_col}** | Prenom col: **{prenom_col}** | Nom col: **{nom_col}** | Date col: **{date_col}**")
+    st.write(f"Stagiaire col: **{stag_col}** | Prenom formateur col: **{prenom_col}** | Nom formateur col: **{nom_col}** | Date col: **{date_col}**")
 
     if st.button("📄 Générer la synthèse PDF (une page par stagiaire)"):
         try:
