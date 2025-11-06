@@ -16,14 +16,11 @@ from reportlab.platypus import (
 from xml.sax.saxutils import escape
 
 # ---------------- Streamlit UI ----------------
-st.set_page_config(page_title="Synthèse évaluations → PDF", layout="centered")
 st.title("🗂️ Synthèse hebdomadaire des évaluations - Stage SAV 2")
-# Mise à jour du type de fichier dans la description
-st.caption("Importe un .xlsx ou .xls (export de ton application). Le PDF généré contient une page par stagiaire avec toutes ses évaluations regroupées par date.")
+# Mise à jour pour n'autoriser que le format supporté
+st.caption("Importe un .xlsx (export de ton application). Le PDF généré contient une page par stagiaire...")
 
-# Mise à jour de la ligne pour accepter .xls et .xlsx
-# NOTE : Nécessite l'installation de la librairie 'xlrd' pour les fichiers .xls : pip install xlrd
-uploaded_file = st.file_uploader("Importer un fichier Excel (.xlsx ou .xls)", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("Importer un fichier Excel (.xlsx)", type=["xlsx"])
 
 # ---------------- Utilities ----------------
 def normalise_colname(name: str) -> str:
